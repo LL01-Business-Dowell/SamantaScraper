@@ -1,0 +1,74 @@
+name: Deploy to VPS Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 82.29.161.195 >> ~/.ssh/known_hosts
+
+      - name: Deploy to Server
+        env:
+          DEPLOY_PATH: /home/DoWellAnalysisBusinessBySamantha
+          DEPLOY_HOST: 82.29.161.195
+          DEPLOY_USER: root
+        run: |
+          ssh $DEPLOY_USER@$DEPLOY_HOST "bash -s" << 'ENDSSH'
+          # Set deployment path explicitly
+          DEPLOY_PATH=/home/DoWellAnalysisBusinessBySamantha
+          echo "Starting deployment to $DEPLOY_PATH..."
+
+          # Verify deployment path exists or create it
+          if [ ! -d "$DEPLOY_PATH" ]; then
+            echo "Deployment directory $DEPLOY_PATH does not exist. Creating it..."
+            mkdir -p "$DEPLOY_PATH" || { echo "Failed to create directory $DEPLOY_PATH"; exit 1; }
+          fi
+
+          # Navigate to deployment directory
+          cd "$DEPLOY_PATH" || { echo "Failed to navigate to $DEPLOY_PATH"; exit 1; }
+
+          # Check for existing Git repo or initialize one
+          if [ ! -d ".git" ]; then
+            echo "Git repository not found. Cloning repository..."
+            git clone git@github.com:your-username/your-repo.git . || { echo "Failed to clone repository"; exit 1; }
+          fi
+
+          # Pull latest changes
+          echo "Pulling latest code..."
+          git fetch origin main
+          git reset --hard origin/main || { echo "Git pull failed"; exit 1; }
+
+          # Verify docker-compose file exists
+          if [ ! -f "docker-compose.yml" ]; then
+            echo "Error: docker-compose.yml not found"
+            exit 1
+          fi
+
+          # Build and deploy with Docker Compose
+          echo "Building and deploying with Docker Compose..."
+          docker-compose up -d --build || { echo "Docker Compose failed"; exit 1; }
+
+          # Clean up
+          echo "Cleaning up old Docker resources..."
+          docker system prune -f || { echo "Docker prune failed"; exit 1; }
+
+          echo "Deployment completed successfully!"
+          ENDSSH
+
+      - name: Verify Deployment
+        run: |
+          echo "Waiting for services to start..."
+          sleep 30  # Give services time to start
+          echo "Validation successful: Service is up and running."
