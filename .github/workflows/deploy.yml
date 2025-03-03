@@ -21,13 +21,13 @@ jobs:
 
       - name: Deploy to Server
         env:
-          DEPLOY_PATH: /home/DoWellAnalysisBusinessBySamantha
+          DEPLOY_PATH: /home/SamantaScraper
           DEPLOY_HOST: 82.29.161.195
           DEPLOY_USER: root
         run: |
           ssh $DEPLOY_USER@$DEPLOY_HOST "bash -s" << 'ENDSSH'
           # Set deployment path explicitly
-          DEPLOY_PATH=/home/DoWellAnalysisBusinessBySamantha
+          DEPLOY_PATH=/home/SamantaScraper
           echo "Starting deployment to $DEPLOY_PATH..."
 
           # Verify deployment path exists or create it

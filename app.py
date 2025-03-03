@@ -16,7 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Discord webhook URL for notifications
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1346054612855296000/GNuZ9GXWEfaVmmeSDp6ZBws9akL_BztMENNVY0Aa-zIbA9vzGN1HDRvoZf9cfsj7yyYF"
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1259178121517862937/2z2-7nmxSIimP61MCLrjbj1Hqd5T1Reb1sx5lKEEnpRLDO7GiuyNOSMLgsoffVNQcWL5"
 
 # Function to send enhanced notifications to Discord
 def send_discord_notification(message, title=None, color=5814783, fields=None, thumbnail=None, footer=None):
