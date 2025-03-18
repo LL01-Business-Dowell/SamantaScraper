@@ -1,0 +1,38 @@
+
+services:
+  scraper:
+    build: .
+    container_name: django_scraper
+    volumes:
+      - ./output:/usr/src/app/output
+      - ./:/usr/src/app
+    ports:
+      - "8000:8000"  # Expose Django API
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DJANGO_SETTINGS_MODULE=scraper_api.settings
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: always  # Ensures the container restarts if it stops
+    depends_on:
+      - db  # If using a database, uncomment below
+
+  # Uncomment if using PostgreSQL/MySQL as the database
+  # db:
+  #   image: postgres:15
+  #   container_name: postgres_db
+  #   restart: always
+  #   environment:
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: scraperdb
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+# Uncomment if using a database
+# volumes:
+#   pgdata:
