@@ -41,7 +41,10 @@ const App = () => {
       const interval = setInterval(async () => {
         try {
           const response = await axios.get(`http://localhost:8000/progress/${taskId}`);
-          setProgress(response.data.progress);
+          
+          if (response.data.progress !== undefined) {
+            setProgress(response.data.progress);
+          }
           if (response.data.results) {
             setResults(response.data.results);
           }
@@ -51,11 +54,14 @@ const App = () => {
           }
         } catch (error) {
           console.error("Error fetching progress", error);
+          clearInterval(interval);
         }
       }, 2000);
+  
       return () => clearInterval(interval);
     }
   }, [taskId, isRunning]);
+  
 
   const handleCancel = async () => {
     if (taskId) {
