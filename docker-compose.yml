@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  scraper:
+    build: .
+    volumes:
+      - ./output:/usr/src/app/output
+      - ./:/usr/src/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        limits:
+          memory: 2G
