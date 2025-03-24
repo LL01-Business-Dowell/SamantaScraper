@@ -1,12 +1,21 @@
 FROM node:18-alpine
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
-COPY package.json package-lock.json* ./
-RUN npm install
+# Copy package.json and package-lock.json to install dependencies
+COPY package*.json ./
 
+# Install dependencies using npm ci for lockfile consistency
+RUN npm ci
+
+# Install Vite globally
+RUN npm install -g vite
+
+# Copy the rest of the application code
 COPY . .
 
-EXPOSE 3000
+# Expose the port the Vite app runs on
+EXPOSE 5173
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# Start the development server
+CMD ["npm", "run", "dev"]

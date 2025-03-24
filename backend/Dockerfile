@@ -72,14 +72,16 @@ RUN CHROMEDRIVER_VERSION=`wget -qO- https://chromedriver.storage.googleapis.com/
     && chmod +x /usr/local/bin/chromedriver
 
 # Set up work directory
-WORKDIR /app
+WORKDIR /usr/src/app
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy rest of application
-COPY . .
+COPY . /usr/src/app
+
+EXPOSE 8000
 
 # Command to run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
