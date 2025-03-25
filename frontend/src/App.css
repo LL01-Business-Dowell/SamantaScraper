@@ -1,225 +1,42 @@
-:root {
-    --primary-color: #4a6fa5;
-    --secondary-color: #166088;
-    --accent-color: #4cb5ae;
-    --light-color: #f8f9fa;
-    --dark-color: #212529;
-    --border-color: #dee2e6;
-    --error-color: #dc3545;
-    --success-color: #28a745;
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
   }
-  
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  to {
+    transform: rotate(360deg);
   }
-  
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: 1.6;
-    color: var(--dark-color);
-    background-color: var(--light-color);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
   }
-  
-  .app-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-  
-  header {
-    margin-bottom: 2rem;
-    text-align: center;
-  }
-  
-  h1 {
-    color: var(--primary-color);
-  }
-  
-  /* Form Styles */
-  .search-section {
-    background-color: white;
-    border-radius: 8px;
-    padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    margin-bottom: 2rem;
-  }
-  
-  .form-group {
-    margin-bottom: 1.5rem;
-  }
-  
-  label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-  
-  input[type="text"],
-  input[type="file"] {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 1rem;
-  }
-  
-  input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.2);
-  }
-  
-  small {
-    display: block;
-    margin-top: 0.25rem;
-    color: #6c757d;
-  }
-  
-  .button-group {
-    display: flex;
-    gap: 1rem;
-  }
-  
-  .search-button,
-  .cancel-button,
-  .download-button {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s, transform 0.1s;
-  }
-  
-  .search-button {
-    background-color: var(--primary-color);
-    color: white;
-  }
-  
-  .search-button:hover {
-    background-color: #3a5a84;
-  }
-  
-  .search-button:disabled {
-    background-color: #7a94b8;
-    cursor: not-allowed;
-  }
-  
-  .cancel-button {
-    background-color: var(--error-color);
-    color: white;
-  }
-  
-  .cancel-button:hover {
-    background-color: #bd2130;
-  }
-  
-  .download-button {
-    background-color: var(--success-color);
-    color: white;
-    text-decoration: none;
-    display: inline-block;
-  }
-  
-  .download-button:hover {
-    background-color: #218838;
-  }
-  
-  /* Progress Bar */
-  .progress-container {
-    margin-top: 1rem;
-  }
-  
-  .progress-bar {
-    height: 10px;
-    background-color: #e9ecef;
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-  }
-  
-  .progress-fill {
-    height: 100%;
-    background-color: var(--primary-color);
-    transition: width 0.3s ease;
-  }
-  
-  .progress-text {
-    text-align: right;
-    font-size: 0.875rem;
-    color: #6c757d;
-  }
-  
-  /* Results Section */
-  .results-section {
-    background-color: white;
-    border-radius: 8px;
-    padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-  
-  .results-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-  
-  .table-container {
-    overflow-x: auto;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 600px;
-  }
-  
-  th, td {
-    padding: 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-  }
-  
-  th {
-    background-color: #f8f9fa;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  
-  tr:hover {
-    background-color: #f8f9fa;
-  }
-  
-  .no-results {
-    text-align: center;
-    color: #6c757d;
-    padding: 2rem;
-  }
-  
-  /* Responsive design */
-  @media (max-width: 768px) {
-    .app-container {
-      padding: 1rem;
-    }
-    
-    .search-section,
-    .results-section {
-      padding: 1.5rem;
-    }
-    
-    .button-group {
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    
-    th, td {
-      padding: 0.75rem;
-    }
-  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}

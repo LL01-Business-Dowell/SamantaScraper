@@ -10,6 +10,8 @@ COPY package*.json ./
 # Install dependencies (fallback to npm install if package-lock.json is missing)
 RUN npm install
 
+RUN npm install -g vite
+
 # Copy all project files
 COPY . .
 
