@@ -20,11 +20,11 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/usr/src/app
-      - /usr/src/app/node_modules
     depends_on:
       - backend
     networks:
       - queue-net
-  networks:
+
+networks:
   queue-net:
     driver: bridge

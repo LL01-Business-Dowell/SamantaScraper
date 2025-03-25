@@ -1,0 +1,21 @@
+{
+  "name": "maps-scraper-copy",
+  "version": "1.0.0",
+  "description": "This project provides a web application that allows users to search for businesses on Google Maps based on keywords, locations, and postal codes without using the paid Google Maps API. Instead, it uses Selenium with headless Chrome to perform searches and extract data.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LL01-Business-Dowell/SamantaScraper.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/LL01-Business-Dowell/SamantaScraper/issues"
+  },
+  "homepage": "https://github.com/LL01-Business-Dowell/SamantaScraper#readme"
+}

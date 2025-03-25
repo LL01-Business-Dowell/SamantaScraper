@@ -1,21 +1,23 @@
-FROM node:18-alpine
+# Use official Node.js LTS version
+FROM node:18
 
+# Set work directory inside container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json to install dependencies
+# Copy package.json and package-lock.json first (Handle missing lock file)
 COPY package*.json ./
 
-# Install dependencies using npm ci for lockfile consistency
-RUN npm ci
+# Install dependencies (fallback to npm install if package-lock.json is missing)
+RUN npm install
 
-# Install Vite globally
-RUN npm install -g vite
-
-# Copy the rest of the application code
+# Copy all project files
 COPY . .
 
-# Expose the port the Vite app runs on
+# Ensure proper file permissions
+RUN chmod -R 777 /usr/src/app
+
+# Expose port for frontend app (Vite default is 5173)
 EXPOSE 5173
 
-# Start the development server
+# Start the app
 CMD ["npm", "run", "dev"]
