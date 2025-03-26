@@ -22,7 +22,7 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [taskId, setTaskId] = useState(null);
 
-  axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  axios.defaults.baseURL = 'https://map.uxlivinglab.online/api';
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
