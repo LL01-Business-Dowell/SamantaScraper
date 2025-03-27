@@ -9,7 +9,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 from typing import List, Dict, Any
 import logging
-
+import os
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def setup_selenium_driver():
     """
     Set up and return a Selenium WebDriver for Chrome in headless mode.
+    Includes robust error handling and logging.
     """
     try:
         # Chrome options
@@ -26,14 +27,49 @@ def setup_selenium_driver():
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-software-rasterizer")
+
+        # Fallback paths for Chrome and ChromeDriver
+        chrome_bin_paths = [
+            os.getenv("GOOGLE_CHROME_BIN", "/usr/bin/google-chrome"),
+            "/usr/bin/google-chrome",
+            "/usr/local/bin/google-chrome"
+        ]
         
-        # In Docker, the chromedriver is installed at /usr/local/bin/chromedriver
-        service = Service('/usr/local/bin/chromedriver')
+        chromedriver_paths = [
+            os.getenv("CHROMEDRIVER_PATH", "/usr/local/bin/chromedriver"),
+            "/usr/local/bin/chromedriver",
+            "/usr/bin/chromedriver"
+        ]
+
+        # Find first valid Chrome binary path
+        chrome_binary = next((path for path in chrome_bin_paths if os.path.exists(path)), None)
+        if not chrome_binary:
+            raise FileNotFoundError("No valid Chrome binary found")
         
+        chrome_options.binary_location = chrome_binary
+
+        # Find first valid ChromeDriver path
+        chromedriver_path = next((path for path in chromedriver_paths if os.path.exists(path)), None)
+        if not chromedriver_path:
+            raise FileNotFoundError("No valid ChromeDriver found")
+        
+        service = Service(chromedriver_path)
+
+        # Logging for debugging
+        logger.info(f"Using Chrome binary: {chrome_binary}")
+        logger.info(f"Using ChromeDriver: {chromedriver_path}")
+
+        # Create WebDriver instance with retry
         driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver.implicitly_wait(10)
+
         return driver
+
     except Exception as e:
-        logger.error(f"Error setting up Selenium driver: {str(e)}")
+        logger.error(f"Selenium driver setup failed: {e}")
         raise
 
 def perform_google_maps_search(driver, search_query: str, postal_code: str) -> List[Dict[str, Any]]:
