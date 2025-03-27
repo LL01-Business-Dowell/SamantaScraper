@@ -1,4 +1,3 @@
-
 FROM python:3.11
 
 # Set the working directory
@@ -21,22 +20,25 @@ RUN apt-get update --fix-missing && apt-get install -f -y && \
 # Set Chrome binary path for Selenium
 ENV GOOGLE_CHROME_BIN=/usr/bin/google-chrome
 
-# Install Chromedriver
-# Install Chromedriver using LATEST_RELEASE
-# Install Chromedriver using LATEST_RELEASE_STABLE (Corrected URL)
-RUN set -eux; CHROME_DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE"); \
-    echo "ChromeDriver LATEST_RELEASE Version: ${CHROME_DRIVER_VERSION}"; \ 
+# Install ChromeDriver
+RUN set -eux; \
+    CHROME_DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE"); \
+    echo "ChromeDriver LATEST_RELEASE Version: ${CHROME_DRIVER_VERSION}"; \
     wget -O /tmp/chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/133.0.6943.53/linux64/chromedriver-linux64.zip"; \
-    if [ ! -s /tmp/chromedriver.zip ]; then \ 
-    echo "ERROR: ChromeDriver zip file download failed or resulted in empty file!"; \
-    exit 1; \
+    if [ ! -s /tmp/chromedriver.zip ]; then \
+        echo "ERROR: ChromeDriver zip file download failed or resulted in empty file!"; \
+        exit 1; \
     fi; \
-    unzip /tmp/chromedriver.zip -d /usr/local/bin/; \
+    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
+    mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    chmod +x /usr/local/bin/chromedriver && \
+    rm -rf /usr/local/bin/chromedriver-linux64 && \
     rm /tmp/chromedriver.zip; \
-    echo "ChromeDriver installation to /usr/local/bin/ completed successfully." 
+    echo "ChromeDriver installation to /usr/local/bin/ completed successfully."
+
 # Set Chromedriver path for Selenium
 ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
-
+ENV PATH="/usr/local/bin:${PATH}"
 
 # Copy requirements file
 COPY requirements.txt /usr/src/app/requirements.txt
