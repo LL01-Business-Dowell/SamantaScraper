@@ -1,14 +1,19 @@
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import StreamingResponse
 import pandas as pd
-import uuid
+import time
+import threading
+import re
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+from fastapi.middleware.cors import CORSMiddleware
 import os
-from .search import perform_google_maps_search, setup_selenium_driver
-from typing import Dict, List, Any, Optional
 
 app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,132 +22,121 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory storage for tasks
 tasks = {}
 
-@app.get("/")
-def read_root():
-    return {"status": "API is running"}
+def clean_text(text):
+    """Removes special characters and excessive whitespace from text."""
+    return re.sub(r'[^\w\s,.-]', '', text).strip()
 
-@app.post("/api/search")
-async def start_search(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    keyword: str = Form(...),
-    location: str = Form(...)
-):
-    # Generate task ID
-    task_id = str(uuid.uuid4())
+def init_driver():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--window-size=1920,1080")
     
-    # Save file temporarily
-    file_path = f"/tmp/{task_id}_{file.filename}"
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-    
-    # Read CSV file to validate
-    try:
-        df = pd.read_csv(file_path)
-        if 'postal_code' not in df.columns:
-            os.remove(file_path)
-            raise HTTPException(status_code=400, detail="CSV file must contain a 'postal_code' column")
-        postal_codes = df['postal_code'].astype(str).tolist()
-    except Exception as e:
-        os.remove(file_path)
-        raise HTTPException(status_code=400, detail=f"Error processing CSV file: {str(e)}")
-    
-    # Initialize task
-    tasks[task_id] = {
-        "status": "in_progress",
-        "progress": 0,
-        "results": [],
-        "total_postal_codes": len(postal_codes),
-        "processed_postal_codes": 0,
-        "file_path": file_path,
-        "driver": None,
-        "cancelled": False
-    }
-    
-    # Start background task
-    background_tasks.add_task(
-        process_search,
-        task_id,
-        postal_codes,
-        keyword,
-        location
-    )
-    
-    return {"task_id": task_id, "message": "Search started"}
+    # Docker-specific ChromeDriver configuration
+    options.binary_location = os.environ.get("GOOGLE_CHROME_BIN", "/usr/bin/google-chrome")
+    service = Service(os.environ.get("CHROMEDRIVER_PATH", "/usr/local/bin/chromedriver"))
 
-async def process_search(task_id: str, postal_codes: List[str], keyword: str, location: str):
-    # Setup Selenium driver
-    driver = setup_selenium_driver()
-    tasks[task_id]["driver"] = driver
+def scrape_google_maps(task_id, postal_codes, keyword, location):
+    driver = init_driver()
+    results = []
     
-    all_results = []
-    total = len(postal_codes)
-    
-    try:
-        for index, postal_code in enumerate(postal_codes):
-            # Check if task was cancelled
-            if tasks[task_id]["cancelled"]:
-                break
-            
-            search_query = f"{keyword} in {postal_code}, {location}"
-            results = perform_google_maps_search(driver, search_query, postal_code)
-            all_results.extend(results)
-            
-            # Update progress
-            processed = index + 1
-            progress = int((processed / total) * 100)
-            tasks[task_id]["progress"] = progress
-            tasks[task_id]["processed_postal_codes"] = processed
-            tasks[task_id]["results"] = all_results
-        
-        # Complete task
-        if not tasks[task_id]["cancelled"]:
-            tasks[task_id]["status"] = "completed"
-            tasks[task_id]["progress"] = 100
-    except Exception as e:
-        tasks[task_id]["status"] = "failed"
-        print(f"Error processing search: {str(e)}")
-    finally:
-        # Clean up
-        if driver:
-            driver.quit()
-        
-        # Remove temporary file
-        if os.path.exists(tasks[task_id]["file_path"]):
-            os.remove(tasks[task_id]["file_path"])
+    for idx, postal_code in enumerate(postal_codes):
+        if not tasks[task_id]["running"]:
+            break  # Stop if canceled
 
-@app.get("/api/status/{task_id}")
-async def get_task_status(task_id: str):
-    if task_id not in tasks:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    task = tasks[task_id]
-    return {
-        "status": task["status"],
-        "progress": task["progress"],
-        "results": task["results"],
-        "total": task["total_postal_codes"],
-        "processed": task["processed_postal_codes"]
-    }
+        search_query = f"{keyword} in {postal_code}, {location}"
+        google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
+        driver.get(google_maps_url)
+        time.sleep(3)
 
-@app.delete("/api/cancel/{task_id}")
-async def cancel_task(task_id: str):
-    if task_id not in tasks:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    tasks[task_id]["cancelled"] = True
-    
-    # Close browser if it's open
-    if tasks[task_id]["driver"]:
+        business_links = []
         try:
-            tasks[task_id]["driver"].quit()
+            elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+            business_links = [e.get_attribute("href") for e in elements[:20]]
         except:
             pass
+
+        for url in business_links:
+            if not tasks[task_id]["running"]:
+                break
+
+            driver.get(url)
+            time.sleep(2)
+            try:
+                name = clean_text(driver.find_element(By.CSS_SELECTOR, "h1").text)
+                address = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-item-id="address"]').text)
+                phone = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+                
+                website = "Not Available"
+                try:
+                    website_element = driver.find_element(By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                    website = clean_text(website_element.get_attribute("href"))
+                except:
+                    pass
+
+                results.append({
+                    "Postal Code": postal_code,
+                    "Name": name,
+                    "Address": address,
+                    "Phone": phone,
+                    "Website": website,
+                    "URL": url
+                })
+            except:
+                continue
+
+        tasks[task_id]["progress"] = (idx + 1) / len(postal_codes) * 100
+        tasks[task_id]["results"] = results
+
+    driver.quit()
+    tasks[task_id]["running"] = False
+
+@app.post("/upload/")
+async def upload_csv(file: UploadFile, keyword: str = Form(...), location: str = Form(...)):
+    task_id = str(time.time())
+    df = pd.read_csv(file.file)
+    postal_codes = df.iloc[:, 0].dropna().astype(str).tolist()
+
+    tasks[task_id] = {"running": True, "progress": 0, "results": []}
+
+    threading.Thread(target=scrape_google_maps, args=(task_id, postal_codes, keyword, location)).start()
+
+    return {"message": "Processing started", "task_id": task_id}
+
+@app.get("/progress/{task_id}")
+async def get_progress(task_id: str):
+    if task_id in tasks:
+        task = tasks[task_id]
+        return {
+            "progress": task.get("progress", 0),
+            "results": task.get("results", []),
+            "running": task.get("running", False),
+        }
+    return {"error": "Task not found"}
+
+@app.post("/cancel/{task_id}")
+def cancel_task(task_id: str):
+    if task_id in tasks:
+        tasks[task_id]["running"] = False
+        return {"message": "Task canceled"}
+    return {"error": "Task not found"}
+
+@app.get("/download/{task_id}")
+def download_results(task_id: str):
+    if task_id not in tasks or not tasks[task_id]["results"]:
+        return {"error": "No results found"}
     
-    tasks[task_id]["status"] = "cancelled"
+    def iter_csv():
+        yield "Postal Code,Name,Address,Phone,Website,URL\n"
+        for row in tasks[task_id]["results"]:
+            yield f"{row['Postal Code']},{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']}\n"
     
-    return {"message": "Task cancelled successfully"}
+    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
