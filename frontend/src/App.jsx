@@ -138,7 +138,6 @@ const App = () => {
         setIsRunning(false);
         setTaskId(null); // Reset task ID
         setProgress(0);
-        setResults([]);
       } catch (error) {
         console.error("Error cancelling the task", error);
       }
@@ -172,7 +171,9 @@ const App = () => {
   const handleResetForm = () => {
     setFile(null);
     setKeyword("");
-    setLocation("");
+    setSelectedCountry("");
+    setSelectedCity("");
+    setEmail("");
     setTaskId(null);
     setProgress(0);
     setResults([]);
