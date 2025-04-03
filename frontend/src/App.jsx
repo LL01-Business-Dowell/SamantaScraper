@@ -138,6 +138,7 @@ const App = () => {
         setIsRunning(false);
         setTaskId(null); // Reset task ID
         setProgress(0);
+        setSearchComplete(true)
       } catch (error) {
         console.error("Error cancelling the task", error);
       }
