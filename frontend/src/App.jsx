@@ -82,6 +82,9 @@ const App = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const file = fileInputRef.current.files[0];
+
     if (!file || !keyword || !selectedCountry || !selectedCity || !email) {
       alert("Please fill in all fields and upload a file.");
       return;
@@ -109,7 +112,7 @@ const App = () => {
       intervalRef.current = setInterval(async () => {
         try {
           const response = await axios.get(`/progress/${taskId}`);
-
+  
           if (response.data.progress !== undefined) {
             setProgress(response.data.progress);
           }
@@ -120,7 +123,7 @@ const App = () => {
             setIsRunning(false);
             setSearchComplete(true);
             clearInterval(intervalRef.current);
-            intervalRef.current = null;  // Reset interval ref
+            intervalRef.current = null;
           }
         } catch (error) {
           console.error("Error fetching progress", error);
@@ -129,7 +132,7 @@ const App = () => {
         }
       }, 2000);
     }
-
+  
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -137,6 +140,8 @@ const App = () => {
       }
     };
   }, [taskId, isRunning]);
+  
+
 
 
 
@@ -144,24 +149,28 @@ const App = () => {
     if (taskId) {
       try {
         await axios.post(`/cancel/${taskId}`);
-
-        setIsRunning(false);
-        setTaskId(null);  // Reset taskId to prevent useEffect from triggering upload
-        setProgress(0);
-        setSearchComplete(false);
-        setResults([]);
-
-        // ✅ Clear interval properly
+  
+        // Stop progress polling
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
-
+  
+        // Reset state
+        setTaskId(null);
+        setIsRunning(false);
+        setProgress(0);
+        setSearchComplete(true);
+        // setResults([]);
+  
+        console.log(`Task ${taskId} canceled successfully.`);
       } catch (error) {
-        console.error("Error cancelling the task", error);
+        console.error("Error canceling the task", error);
       }
     }
   };
+  
+
 
 
 

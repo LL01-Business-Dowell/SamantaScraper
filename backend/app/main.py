@@ -58,8 +58,10 @@ def scrape_google_maps(task_id, postal_codes, keyword, country, city):
     results = []
 
     for idx, postal_code in enumerate(postal_codes):
-        if not tasks[task_id]["running"]:
-            break  # Stop if canceled
+        if not tasks.get(task_id, {}).get("running", False):
+            print(f"Task {task_id} canceled. Exiting scraping process.")
+            driver.quit()
+            return  # ✅ Exit function immediately
 
         search_query = f"{keyword} in {postal_code}, {city}, {country}"
         google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
@@ -69,31 +71,27 @@ def scrape_google_maps(task_id, postal_codes, keyword, country, city):
             time.sleep(3)
 
             business_links = []
-            elements = driver.find_elements(
-                By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+            elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
             business_links = [e.get_attribute("href") for e in elements[:20]]
 
             for url in business_links:
-                if not tasks[task_id]["running"]:
-                    break
+                if not tasks.get(task_id, {}).get("running", False):
+                    print(f"Task {task_id} canceled. Exiting business details extraction.")
+                    driver.quit()
+                    return  # ✅ Exit function immediately
 
                 driver.get(url)
                 time.sleep(2)
 
                 try:
-                    name = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, "h1").text)
-                    address = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-item-id="address"]').text)
-                    phone = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+                    name = clean_text(driver.find_element(By.CSS_SELECTOR, "h1").text)
+                    address = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-item-id="address"]').text)
+                    phone = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
 
                     website = "Not Available"
-                    website_element = driver.find_element(
-                        By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                    website_element = driver.find_element(By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
                     if website_element:
-                        website = clean_text(
-                            website_element.get_attribute("href"))
+                        website = clean_text(website_element.get_attribute("href"))
 
                     results.append({
                         "Postal Code": postal_code,
@@ -116,6 +114,7 @@ def scrape_google_maps(task_id, postal_codes, keyword, country, city):
 
     driver.quit()
     tasks[task_id]["running"] = False
+
 
 
 # Define the path to the JSON files
@@ -210,9 +209,12 @@ async def get_progress(task_id: str):
 def cancel_task(task_id: str):
     """Cancels an ongoing scraping task."""
     if task_id in tasks:
-        tasks[task_id]["running"] = False
-        return {"message": "Task canceled"}
-    return {"error": "Task not found"}
+        tasks[task_id]["running"] = False  # ✅ Stop running task
+        time.sleep(1)  # Small delay to allow thread to exit
+        del tasks[task_id]  # ✅ Remove from memory
+        return {"message": f"Task {task_id} has been canceled"}
+    return JSONResponse(status_code=404, content={"error": "Task not found"})
+
 
 
 @app.get("/download/{task_id}")
