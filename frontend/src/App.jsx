@@ -24,7 +24,7 @@ const App = () => {
   const [error, setError] = useState(null);
 
   const intervalRef = React.useRef(null);
-  const fileInputRef = useRef(null);
+  const fileInputRef = React.useRef(null);
 
 
   axios.defaults.baseURL = API_BASE_URL;
