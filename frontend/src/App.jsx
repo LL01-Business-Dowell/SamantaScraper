@@ -24,6 +24,7 @@ const App = () => {
   const [error, setError] = useState(null);
 
   const intervalRef = React.useRef(null);
+  const fileInputRef = useRef(null);
 
 
   axios.defaults.baseURL = API_BASE_URL;
@@ -242,6 +243,7 @@ const App = () => {
                   type="file"
                   accept=".csv"
                   onChange={handleFileChange}
+                  ref={fileInputRef}
                   required
                   id="file-upload"
                   className="hidden"
