@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaUpload, FaFileDownload, FaTimes, FaSync, FaSearch, FaMapMarkerAlt, FaKeyboard } from "react-icons/fa";
+import { FaUpload, FaFileDownload, FaTimes, FaSync, FaSearch, FaMapMarkerAlt, FaKeyboard, FaEnvelope } from "react-icons/fa";
 import API_BASE_URL from "./config";
 
 const App = () => {
   const [file, setFile] = useState(null);
   const [keyword, setKeyword] = useState("");
+  const [email, setEmail] = useState("");
   const [location, setLocation] = useState("");
   const [taskId, setTaskId] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -13,23 +14,81 @@ const App = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [searchComplete, setSearchComplete] = useState(false);
 
+  const [countries, setCountries] = useState([]);
+  const [selectedCountry, setSelectedCountry] = useState("");
+  const [cities, setCities] = useState([]);
+  const [selectedCity, setSelectedCity] = useState("");
+
+  const [loadingCountries, setLoadingCountries] = useState(true);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [error, setError] = useState(null);
+
+  axios.defaults.baseURL = API_BASE_URL;
+
+  // Fetch countries (JSON filenames from backend)
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const response = await axios.get("/countries");
+        console.log("Countries API Response:", response.data);
+
+        if (response.data?.countries) {
+          setCountries(response.data.countries);
+        } else {
+          console.error("Unexpected API response:", response.data);
+          setCountries([]); // Prevent crash
+        }
+      } catch (err) {
+        console.error("Error fetching countries:", err.message);
+        setCountries([]); // Prevent crash
+      }
+    };
+
+    fetchCountries();
+  }, []);
+
+  // ✅ Handle country selection
+  const handleCountryChange = async (e) => {
+    const country = e.target.value;
+    setSelectedCountry(country);
+    setCities([]); // Reset cities
+
+    if (!country) return;
+
+    try {
+      const response = await axios.get(`/cities/${encodeURIComponent(country)}`);
+      console.log("Cities API Response:", response.data);
+
+      if (response.data?.cities) {
+        setCities(response.data.cities);
+      } else {
+        console.error("Unexpected API response:", response.data);
+        setCities([]); // Prevent crash
+      }
+    } catch (err) {
+      console.error("Error fetching cities:", err.message);
+      setCities([]); // Prevent crash
+    }
+  };
+
+
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!file || !keyword || !location) {
+    if (!file || !keyword || !selectedCountry || !selectedCity || !email) {
       alert("Please fill in all fields and upload a file.");
       return;
     }
 
-    axios.defaults.baseURL = API_BASE_URL;
-
     const formData = new FormData();
     formData.append("file", file);
     formData.append("keyword", keyword);
-    formData.append("location", location);
+    formData.append("country", selectedCountry);
+    formData.append("city", selectedCity);
+    formData.append("email", email);
 
     try {
       const response = await axios.post("/upload/", formData);
@@ -42,8 +101,9 @@ const App = () => {
   };
 
   useEffect(() => {
+    let interval;
     if (taskId && isRunning) {
-      const interval = setInterval(async () => {
+      interval = setInterval(async () => {
         try {
           const response = await axios.get(`/progress/${taskId}`);
 
@@ -63,17 +123,28 @@ const App = () => {
           clearInterval(interval);
         }
       }, 2000);
-
-      return () => clearInterval(interval);
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [taskId, isRunning]);
+
 
   const handleCancel = async () => {
     if (taskId) {
-      await axios.post(`/cancel/${taskId}`);
-      setIsRunning(false);
+      try {
+        await axios.post(`/cancel/${taskId}`);  // Notify the backend to cancel the task
+        setIsRunning(false);
+        setTaskId(null); // Reset task ID
+        setProgress(0);
+        setResults([]);
+      } catch (error) {
+        console.error("Error cancelling the task", error);
+      }
     }
   };
+
 
   const handleDownload = async () => {
     if (taskId) {
@@ -143,7 +214,7 @@ const App = () => {
           <div className="bg-[#1A1E2E] rounded-3xl shadow-2xl border border-gray-800/50 p-8 space-y-6 relative overflow-hidden">
             {/* Gradient Border */}
             <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-indigo-900/20 to-blue-900/20 opacity-50 -z-10"></div>
-            
+
             <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
               {/* File Upload */}
               <div className="flex flex-col">
@@ -155,11 +226,11 @@ const App = () => {
                   id="file-upload"
                   className="hidden"
                 />
-                <label 
-                  htmlFor="file-upload" 
+                <label
+                  htmlFor="file-upload"
                   className="flex items-center justify-center bg-gradient-to-r from-purple-600 to-indigo-700 text-white py-3 px-6 rounded-xl hover:scale-[1.02] transition-transform duration-300 ease-in-out shadow-lg hover:shadow-xl"
                 >
-                  <FaUpload className="mr-3 text-lg" /> 
+                  <FaUpload className="mr-3 text-lg" />
                   Choose CSV File
                 </label>
                 {file && (
@@ -169,41 +240,102 @@ const App = () => {
                 )}
               </div>
 
+              {/* Email Input */}
+              <div className="relative">
+                <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
+                />
+              </div>
+
               {/* Keyword Input */}
               <div className="relative">
                 <FaKeyboard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                <input 
-                  type="text" 
-                  placeholder="Keyword" 
-                  value={keyword} 
-                  onChange={(e) => setKeyword(e.target.value)} 
-                  required 
+                <input
+                  type="text"
+                  placeholder="Keyword"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  required
                   className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
                 />
               </div>
 
-              {/* Location Input */}
-              <div className="relative">
-                <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                <input 
-                  type="text" 
-                  placeholder="Location" 
-                  value={location} 
-                  onChange={(e) => setLocation(e.target.value)} 
-                  required 
-                  className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
-                />
+              {/* Country Dropdown */}
+              <div className="container mx-auto p-6">
+                {/* Country Dropdown */}
+                <div className="relative mb-4">
+                  <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+                  <select
+                    value={selectedCountry}
+                    onChange={handleCountryChange}
+                    required
+                    className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
+                  >
+                    <option value="" disabled>
+                      {loadingCountries ? "Loading countries..." : "Select a country"}
+                    </option>
+                    {error ? (
+                      <option disabled>Error loading countries</option>
+                    ) : (
+                      countries.length > 0 ? (
+                        countries.map((country, index) => (
+                          <option key={index} value={country}>
+                            {country}
+                          </option>
+                        ))
+                      ) : (
+                        <option disabled>No countries available</option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                {/* City Dropdown (Only visible if a country is selected) */}
+                {selectedCountry && (
+                  <div className="relative">
+                    <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+                    <select
+                      value={selectedCity}
+                      onChange={(e) => setSelectedCity(e.target.value)}
+                      required
+                      className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
+                    >
+                      <option value="" disabled>
+                        {loadingCities ? "Loading cities..." : "Select a city"}
+                      </option>
+                      {error ? (
+                        <option disabled>Error loading cities</option>
+                      ) : (
+                        cities.length > 0 ? (
+                          cities.map((city, index) => (
+                            <option key={index} value={city}>
+                              {city}
+                            </option>
+                          ))
+                        ) : (
+                          <option disabled>No cities available</option>
+                        )
+                      )}
+                    </select>
+                  </div>
+                )}
               </div>
+
 
               {/* Submit Button */}
-              <button 
-                type="submit" 
-                disabled={isRunning} 
-                className={`w-full py-3 rounded-xl transition-all duration-300 flex items-center justify-center ${
-                  isRunning 
-                    ? 'bg-gray-700 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white hover:from-purple-700 hover:to-indigo-800 shadow-lg hover:shadow-xl'
-                }`}
+              <button
+                type="submit"
+                disabled={isRunning}
+                className={`w-full py-3 rounded-xl transition-all duration-300 flex items-center justify-center ${isRunning
+                  ? 'bg-gray-700 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white hover:from-purple-700 hover:to-indigo-800 shadow-lg hover:shadow-xl'
+                  }`}
               >
                 <FaSearch className="mr-3" />
                 {isRunning ? "Searching..." : "Start Scraping"}
@@ -213,8 +345,8 @@ const App = () => {
               {isRunning && (
                 <div className="mt-6">
                   <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-purple-600 to-indigo-700 h-full rounded-full transition-all duration-500" 
+                    <div
+                      className="bg-gradient-to-r from-purple-600 to-indigo-700 h-full rounded-full transition-all duration-500"
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>
@@ -222,8 +354,9 @@ const App = () => {
                     <p className="text-sm text-gray-400 font-medium">
                       Progress: {progress.toFixed(2)}%
                     </p>
-                    <button 
-                      onClick={handleCancel} 
+                    <button
+                      onClick={handleCancel}
+                      disabled={!isRunning}
                       className="text-red-500 hover:text-red-400 flex items-center font-medium"
                     >
                       <FaTimes className="mr-2" /> Cancel
@@ -234,8 +367,8 @@ const App = () => {
 
               {/* Reset Button */}
               {searchComplete && (
-                <button 
-                  onClick={handleResetForm} 
+                <button
+                  onClick={handleResetForm}
                   className="w-full mt-6 py-3 bg-gray-800 text-gray-300 rounded-xl hover:bg-gray-700 flex items-center justify-center transition-all"
                 >
                   <FaSync className="mr-3" /> Reset Form
@@ -272,9 +405,9 @@ const App = () => {
                           <td className="px-4 py-3 text-gray-300">{row.Phone}</td>
                           <td className="px-4 py-3">
                             {row.Website !== "Not Available" ? (
-                              <a 
-                                href={row.Website} 
-                                target="_blank" 
+                              <a
+                                href={row.Website}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-purple-400 hover:text-purple-300 hover:underline transition"
                               >
@@ -285,9 +418,9 @@ const App = () => {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <a 
-                              href={row.URL} 
-                              target="_blank" 
+                            <a
+                              href={row.URL}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="text-purple-400 hover:text-purple-300 hover:underline transition"
                             >
@@ -301,8 +434,8 @@ const App = () => {
                 </div>
 
                 {/* Download Button */}
-                <button 
-                  onClick={handleDownload} 
+                <button
+                  onClick={handleDownload}
                   className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-xl hover:from-purple-700 hover:to-indigo-800 flex items-center justify-center transition-all shadow-lg hover:shadow-xl"
                 >
                   <FaFileDownload className="mr-3 text-lg" /> Download CSV

@@ -1,0 +1,25 @@
+[
+    {
+        "Geoname ID": "2161314",
+        "Name": "Kingston",
+        "ASCII Name": "Kingston",
+        "Alternate Names": "Kingston,Kingston pa Norfolkoya,Kingston p\u00e5 Norfolk\u00f8ya,Kingstona,Kingstonas,Kingstono,Kingstun,Kinqston,Pasjolak Kingstan,jin si dui,khing s tan,kincutan,kingseuteon,kingstana,kingusuton,kynghstwn,kyngstwn,\u041a\u0438\u043d\u0433\u0441\u0442\u043e\u043d,\u041a\u0438\u043d\u0433\u0441\u0442\u044a\u043d,\u041a\u0456\u043d\u0433\u0441\u0442\u043e\u043d,\u041f\u0430\u0441\u0451\u043b\u0430\u043a \u041a\u0456\u043d\u0433\u0441\u0442\u0430\u043d,\u0643\u064a\u0646\u063a\u0633\u062a\u0648\u0646,\u06a9\u0646\u06af\u0633\u0679\u0646,\u06a9\u06cc\u0646\u06af\u0633\u062a\u0648\u0646,\u0915\u093f\u0902\u0917\u094d\u0938\u094d\u091f\u0928,\u0b95\u0bbf\u0b99\u0bcd\u0b9a\u0bc1\u0b9f\u0ba9\u0bcd,\u0e04\u0e34\u0e07\u0e2a\u0e4c\u0e15\u0e31\u0e19,\u10d9\u10d8\u10dc\u10d2\u10e1\u10e2\u10dd\u10dc\u10d8,\u30ad\u30f3\u30b0\u30b9\u30c8\u30f3,\u91d1\u65af\u6566,\ud0b9\uc2a4\ud134",
+        "Feature Class": "P",
+        "Feature Code": "PPLC",
+        "Country Code": "NF",
+        "Country name EN": "Norfolk Island",
+        "Country Code 2": "AU",
+        "Admin1 Code": "0",
+        "Admin2 Code": "",
+        "Admin3 Code": "",
+        "Admin4 Code": "",
+        "Population": "880",
+        "Elevation": "",
+        "DIgital Elevation Model": "71",
+        "Timezone": "Pacific/Norfolk",
+        "Modification date": "Mon Aug 18 2014 05:30:00 GMT+0530 (India Standard Time)",
+        "LABEL EN": "Norfolk Island",
+        "latitude": "-29.05459",
+        "longitude": "167.96628"
+    }
+]
