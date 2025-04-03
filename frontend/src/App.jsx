@@ -138,7 +138,8 @@ const App = () => {
         setIsRunning(false);
         setTaskId(null); // Reset task ID
         setProgress(0);
-        setSearchComplete(true)
+        setSearchComplete(true);
+        clearInterval(intervalRef.current);
       } catch (error) {
         console.error("Error cancelling the task", error);
       }
@@ -280,7 +281,7 @@ const App = () => {
                     className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
                   >
                     <option value="" disabled>
-                      {loadingCountries ? "Loading countries..." : "Select a country"}
+                      {loadingCountries ? "Select a Country" : "Select a Country"}
                     </option>
                     {error ? (
                       <option disabled>Error loading countries</option>
@@ -309,7 +310,7 @@ const App = () => {
                       className="w-full pl-10 px-3 py-3 bg-gray-800 border border-gray-700 text-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-300"
                     >
                       <option value="" disabled>
-                        {loadingCities ? "Loading cities..." : "Select a city"}
+                        {loadingCities ? "Select a City" : "Select a City"}
                       </option>
                       {error ? (
                         <option disabled>Error loading cities</option>
