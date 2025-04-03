@@ -23,6 +23,9 @@ const App = () => {
   const [loadingCities, setLoadingCities] = useState(false);
   const [error, setError] = useState(null);
 
+  const intervalRef = React.useRef(null);
+
+
   axios.defaults.baseURL = API_BASE_URL;
 
   // Fetch countries (JSON filenames from backend)
@@ -101,9 +104,8 @@ const App = () => {
   };
 
   useEffect(() => {
-    let interval;
     if (taskId && isRunning) {
-      interval = setInterval(async () => {
+      intervalRef.current = setInterval(async () => {
         try {
           const response = await axios.get(`/progress/${taskId}`);
 
@@ -116,35 +118,50 @@ const App = () => {
           if (!response.data.running) {
             setIsRunning(false);
             setSearchComplete(true);
-            clearInterval(interval);
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;  // Reset interval ref
           }
         } catch (error) {
           console.error("Error fetching progress", error);
-          clearInterval(interval);
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
       }, 2000);
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   }, [taskId, isRunning]);
+
 
 
   const handleCancel = async () => {
     if (taskId) {
       try {
-        await axios.post(`/cancel/${taskId}`);  // Notify the backend to cancel the task
+        await axios.post(`/cancel/${taskId}`);
+
         setIsRunning(false);
-        setTaskId(null); // Reset task ID
+        setTaskId(null);  // Reset taskId to prevent useEffect from triggering upload
         setProgress(0);
-        setSearchComplete(true);
-        clearInterval(intervalRef.current);
+        setSearchComplete(false);
+        setResults([]);
+
+        // ✅ Clear interval properly
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+
       } catch (error) {
         console.error("Error cancelling the task", error);
       }
     }
   };
+
 
 
   const handleDownload = async () => {
