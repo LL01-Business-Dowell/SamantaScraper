@@ -19,7 +19,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "map.uxlivinglab.online"],  # React frontend URL
+    allow_origins=["http://localhost:5173",
+                   "map.uxlivinglab.online"],  # React frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -52,16 +53,15 @@ def init_driver():
     return webdriver.Chrome(service=service, options=options)
 
 
-def scrape_google_maps(task_id, postal_codes, keyword, country, city):
-    """Scrapes Google Maps search results for business information."""
+def scrape_google_maps(task_id, location_data, keyword):
     driver = init_driver()
     results = []
 
-    for idx, postal_code in enumerate(postal_codes):
+    for idx, (postal_code, city, country) in enumerate(location_data):
         if not tasks.get(task_id, {}).get("running", False):
             print(f"Task {task_id} canceled. Exiting scraping process.")
             driver.quit()
-            return  # ✅ Exit function immediately
+            return 
 
         search_query = f"{keyword} in {postal_code}, {city}, {country}"
         google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
@@ -71,27 +71,34 @@ def scrape_google_maps(task_id, postal_codes, keyword, country, city):
             time.sleep(3)
 
             business_links = []
-            elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+            elements = driver.find_elements(
+                By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
             business_links = [e.get_attribute("href") for e in elements[:20]]
 
             for url in business_links:
                 if not tasks.get(task_id, {}).get("running", False):
-                    print(f"Task {task_id} canceled. Exiting business details extraction.")
+                    print(
+                        f"Task {task_id} canceled. Exiting business details extraction.")
                     driver.quit()
-                    return  # ✅ Exit function immediately
+                    return 
 
                 driver.get(url)
                 time.sleep(2)
 
                 try:
-                    name = clean_text(driver.find_element(By.CSS_SELECTOR, "h1").text)
-                    address = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-item-id="address"]').text)
-                    phone = clean_text(driver.find_element(By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+                    name = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, "h1").text)
+                    address = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, '[data-item-id="address"]').text)
+                    phone = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
 
                     website = "Not Available"
-                    website_element = driver.find_element(By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                    website_element = driver.find_element(
+                        By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
                     if website_element:
-                        website = clean_text(website_element.get_attribute("href"))
+                        website = clean_text(
+                            website_element.get_attribute("href"))
 
                     results.append({
                         "Postal Code": postal_code,
@@ -99,37 +106,130 @@ def scrape_google_maps(task_id, postal_codes, keyword, country, city):
                         "Address": address,
                         "Phone": phone,
                         "Website": website,
-                        "URL": url
+                        "URL": url,
+                        "City": city,
+                        "Country": country
                     })
                 except Exception as e:
                     print(f"Error processing business {url}: {e}")
-                    continue  # Skip this entry and move to the next
+                    continue
 
         except Exception as e:
             print(f"Error accessing {google_maps_url}: {e}")
-            continue  # Skip this postal code and move to the next
+            continue 
 
-        tasks[task_id]["progress"] = (idx + 1) / len(postal_codes) * 100
+        tasks[task_id]["progress"] = (idx + 1) / len(location_data) * 100
         tasks[task_id]["results"] = results
 
     driver.quit()
     tasks[task_id]["running"] = False
 
 
+def scrape_google_maps_location(task_id, keyword, country, city):
+    driver = init_driver()
 
-# Define the path to the JSON files
+    if not tasks.get(task_id, {}).get("running", False):
+        print(f"Task {task_id} canceled. Exiting scraping process.")
+        driver.quit()
+        return 
+
+    search_query = f"{keyword} in {city}, {country}"
+    google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
+
+    try:
+        driver.get(google_maps_url)
+        time.sleep(3)
+
+        extracted_urls = set()
+        results = []
+        total_count = 0
+
+        while True:
+            if not tasks.get(task_id, {}).get("running", False):
+                print(f"Task {task_id} canceled. Exiting scraping process.")
+                driver.quit()
+                return
+
+            elements = driver.find_elements(
+                By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+            new_links = {e.get_attribute("href")
+                         for e in elements} - extracted_urls
+
+            for url in new_links:
+                if not tasks.get(task_id, {}).get("running", False):
+                    print(
+                        f"Task {task_id} canceled. Exiting business details extraction.")
+                    driver.quit()
+                    return 
+
+                extracted_urls.add(url)
+
+                driver.get(url)
+                time.sleep(2)
+
+                try:
+                    name = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, "h1").text)
+                    address = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, '[data-item-id="address"]').text)
+                    phone = clean_text(driver.find_element(
+                        By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+
+                    website = "Not Available"
+                    website_element = driver.find_elements(
+                        By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                    if website_element:
+                        website = clean_text(
+                            website_element[0].get_attribute("href"))
+
+                    business_data = {
+                        "Name": name,
+                        "Address": address,
+                        "Phone": phone,
+                        "Website": website,
+                        "URL": url,
+                        "City": city,
+                        "Country": country
+                    }
+                    results.append(business_data)
+
+                    total_count += 1
+                    tasks[task_id]["progress"] = total_count
+                    tasks[task_id]["results"] = results
+
+                except Exception as e:
+                    print(f"Error processing business {url}: {e}")
+                    continue 
+
+            if elements:
+                driver.execute_script(
+                    "arguments[0].scrollIntoView();", elements[-1])
+                time.sleep(2) 
+
+            end_marker = driver.find_elements(
+                By.XPATH, "//div[contains(text(), 'You\'ve reached the end of the list.')]")
+            if end_marker:
+                print("Reached the end of search results.")
+                break
+
+    except Exception as e:
+        print(f"Error accessing {google_maps_url}: {e}")
+
+    driver.quit()
+    tasks[task_id]["running"] = False
+    print(f"Task {task_id} completed successfully.")
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
-# JSON_FOLDER = "backend/data/countries"
 
 
 @app.get("/countries")
 def get_countries():
     try:
-        # List all JSON files, remove the ".json" extension, and sort alphabetically
-        countries = sorted([f[:-5] for f in os.listdir(JSON_FOLDER) if f.endswith(".json")])
+        countries = sorted(
+            [f[:-5] for f in os.listdir(JSON_FOLDER) if f.endswith(".json")])
         return {"countries": countries}
-    
+
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -137,23 +237,18 @@ def get_countries():
 @app.get("/cities/{country}")
 def get_cities(country: str):
     try:
-        # Get the list of all country files (case-insensitive matching)
         country_files = {f.lower(): f for f in os.listdir(
             JSON_FOLDER) if f.endswith(".json")}
 
-        # Convert input to lowercase and append .json
         country_filename = country.lower() + ".json"
         if country_filename not in country_files:
             return JSONResponse(status_code=404, content={"error": f"Country '{country}' not found"})
 
-        # Use correct case file name
         file_path = os.path.join(JSON_FOLDER, country_files[country_filename])
 
-        # Read the JSON file
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Ensure population is treated as an integer
         cities = [
             city["ASCII Name"]
             for city in data
@@ -161,10 +256,9 @@ def get_cities(country: str):
             if int(city.get("Population", 0)) > 100000
         ]
 
-        # If no cities meet the criteria, return a message
         if not cities:
             return JSONResponse(status_code=200, content={"message": "No cities with population greater than 100000"})
-        
+
         return {"cities": cities}
 
     except ValueError as e:
@@ -176,25 +270,41 @@ def get_cities(country: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
 @app.post("/upload/")
-async def upload_csv(file: UploadFile, keyword: str = Form(...), country: str = Form(...), city: str = Form(...), email: str = Form(...)):
-    """Handles CSV file upload and starts the scraping process."""
+async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Form(...)):
     task_id = str(time.time())
     df = pd.read_csv(file.file)
-    postal_codes = df.iloc[:, 0].dropna().astype(str).tolist()
+
+    location_data = []
+    for index, row in df.iterrows():
+        postal_code = str(row.iloc[0]) if not pd.isna(row.iloc[0]) else ""
+        city = str(row.iloc[1]) if not pd.isna(row.iloc[1]) else ""
+        country = str(row.iloc[2]) if not pd.isna(row.iloc[2]) else ""
+
+        location_data.append([postal_code, city, country])
 
     tasks[task_id] = {"running": True, "progress": 0, "results": []}
 
     threading.Thread(target=scrape_google_maps, args=(
-        task_id, postal_codes, keyword, country, city)).start()
+        task_id, location_data, keyword)).start()
+
+    return {"message": "Processing started", "task_id": task_id}
+
+
+@app.post("/search-by-location/")
+async def upload_csv(keyword: str = Form(...), country: str = Form(...), city: str = Form(...), email: str = Form(...)):
+    task_id = str(time.time())
+
+    tasks[task_id] = {"running": True, "progress": 0, "results": []}
+
+    threading.Thread(target=scrape_google_maps_location, args=(
+        task_id, keyword, country, city)).start()
 
     return {"message": "Processing started", "task_id": task_id}
 
 
 @app.get("/progress/{task_id}")
 async def get_progress(task_id: str):
-    """Returns the progress of an ongoing scraping task."""
     if task_id in tasks:
         task = tasks[task_id]
         return {
@@ -207,29 +317,37 @@ async def get_progress(task_id: str):
 
 @app.post("/cancel/{task_id}")
 def cancel_task(task_id: str):
-    """Cancels an ongoing scraping task."""
     if task_id in tasks:
-        tasks[task_id]["running"] = False  # ✅ Stop running task
-        time.sleep(1)  # Small delay to allow thread to exit
-        del tasks[task_id]  # ✅ Remove from memory
+        tasks[task_id]["running"] = False 
+        time.sleep(1) 
+        del tasks[task_id]
         return {"message": f"Task {task_id} has been canceled"}
     return JSONResponse(status_code=404, content={"error": "Task not found"})
 
 
-
 @app.get("/download/{task_id}")
 def download_results(task_id: str):
-    """Allows users to download scraped results as a CSV file."""
     if task_id not in tasks or not tasks[task_id]["results"]:
         return {"error": "No results found"}
 
     def iter_csv():
         yield "Postal Code,Name,Address,Phone,Website,URL\n"
         for row in tasks[task_id]["results"]:
-            yield f"{row['Postal Code']},{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']}\n"
+            yield f"{row['Postal Code']},{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']},{row['City']},{row['Country']}\n"
 
     return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
 
+@app.get("/download-search/{task_id}")
+def download_search_results(task_id: str):
+    if task_id not in tasks or not tasks[task_id]["results"]:
+        return {"error": "No results found"}
+
+    def iter_csv():
+        yield "Postal Code,Name,Address,Phone,Website,URL\n"
+        for row in tasks[task_id]["results"]:
+            yield f"{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']},{row['City']},{row['Country']}\n"
+
+    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
 
 if __name__ == "__main__":
     import uvicorn

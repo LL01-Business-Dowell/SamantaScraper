@@ -30,6 +30,9 @@ const App = () => {
   const [countrySearch, setCountrySearch] = useState("");
   const [citySearch, setCitySearch] = useState("");
 
+  // Add these new state variables
+  const [searchType, setSearchType] = useState("file"); // "file" or "location"
+
   axios.defaults.baseURL = API_BASE_URL;
 
   // Fetch countries (JSON filenames from backend)
@@ -60,6 +63,7 @@ const App = () => {
     setSelectedCountry(country);
     setCities([]); // Reset cities
 
+
     if (!country) return;
 
     try {
@@ -85,27 +89,54 @@ const App = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const file = fileInputRef.current.files[0];
-
-    if (!file || !keyword || !selectedCountry || !selectedCity || !email) {
-      alert("Please fill in all fields and upload a file.");
+    // Common validation for both search types
+    if (!keyword || !email) {
+      alert("Please enter keyword and email.");
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("keyword", keyword);
-    formData.append("country", selectedCountry);
-    formData.append("city", selectedCity);
-    formData.append("email", email);
+    // Different validation and submission logic based on search type
+    if (searchType === "file") {
+      const file = fileInputRef.current.files[0];
+      if (!file) {
+        alert("Please upload a CSV file.");
+        return;
+      }
 
-    try {
-      const response = await axios.post("/upload/", formData);
-      setTaskId(response.data.task_id);
-      setIsRunning(true);
-      setSearchComplete(false);
-    } catch (error) {
-      console.error("Error starting the scraping process", error);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("keyword", keyword);
+      formData.append("email", email);
+
+      try {
+        const response = await axios.post("/upload/", formData);
+        setTaskId(response.data.task_id);
+        setIsRunning(true);
+        setSearchComplete(false);
+      } catch (error) {
+        console.error("Error starting the scraping process", error);
+      }
+    } else { // location-based search
+      if (!selectedCountry || !selectedCity) {
+        alert("Please select both country and city.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("keyword", keyword);
+      formData.append("email", email);
+      formData.append("country", selectedCountry);
+      formData.append("city", selectedCity);
+
+      try {
+        // API call for location-based search
+        const response = await axios.post("/search-by-location/", formData);
+        setTaskId(response.data.task_id);
+        setIsRunning(true);
+        setSearchComplete(false);
+      } catch (error) {
+        console.error("Error starting the location-based search", error);
+      }
     }
   };
 
@@ -191,7 +222,12 @@ const App = () => {
   const handleDownload = async () => {
     if (taskId) {
       try {
-        const response = await axios.get(`/download/${taskId}`, {
+        // Select the appropriate endpoint based on searchType
+        const endpoint = searchType === "file"
+          ? `/download/${taskId}`
+          : `/download-search/${taskId}`;
+
+        const response = await axios.get(endpoint, {
           responseType: 'blob'
         });
 
@@ -200,7 +236,13 @@ const App = () => {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `results_${taskId}.csv`;
+
+        // Create different filename based on search type
+        const filename = searchType === "file"
+          ? `csv_file_results_${taskId}.csv`
+          : `location_search_results_${taskId}.csv`;
+
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -259,32 +301,61 @@ const App = () => {
             <div className="gradient-border"></div>
 
             <form onSubmit={handleSubmit} className="scraper-form">
-              {/* File Upload */}
-              <div className="file-upload">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  ref={fileInputRef}
-                  required
-                  id="file-upload"
-                  className="hidden-input"
-                />
-                <label
-                  htmlFor="file-upload"
-                  className="upload-button"
-                >
-                  <FaUpload className="button-icon" />
-                  Choose CSV File
-                </label>
-                {file && (
-                  <p className="file-name">
-                    Selected: {file.name}
-                  </p>
-                )}
+              {/* Search Type Selection */}
+              <div className="search-type-selection">
+                <div className="radio-group">
+                  <label className={`radio-label ${searchType === "file" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="searchType"
+                      value="file"
+                      checked={searchType === "file"}
+                      onChange={() => setSearchType("file")}
+                      className="radio-input"
+                    />
+                    By CSV
+                  </label>
+                  <label className={`radio-label ${searchType === "location" ? "selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="searchType"
+                      value="location"
+                      checked={searchType === "location"}
+                      onChange={() => setSearchType("location")}
+                      className="radio-input"
+                    />
+                    By Location
+                  </label>
+                </div>
               </div>
 
-              {/* Email Input */}
+              {/* File Upload - Only shown when file search type is selected */}
+              {searchType === "file" && (
+                <div className="file-upload">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileChange}
+                    ref={fileInputRef}
+                    id="file-upload"
+                    className="hidden-input"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="upload-button"
+                  >
+                    <FaUpload className="button-icon" />
+                    Choose CSV File
+                  </label>
+                  {file && (
+                    <p className="file-name">
+                      Selected: {file.name}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Email Input - Common for both search types */}
               <div className="input-container">
                 <FaEnvelope className="input-icon" />
                 <input
@@ -297,7 +368,7 @@ const App = () => {
                 />
               </div>
 
-              {/* Keyword Input */}
+              {/* Keyword Input - Common for both search types */}
               <div className="input-container">
                 <FaKeyboard className="input-icon" />
                 <input
@@ -310,99 +381,104 @@ const App = () => {
                 />
               </div>
 
-              <div className="input-container">
-                <FaMapMarkerAlt className="input-icon" />
-                <div className="custom-select">
-                  <div className="select-selected" onClick={() => document.getElementById("countryDropdown").classList.toggle("show")}>
-                    {selectedCountry || "Select a Country"}
-                  </div>
-                  <div id="countryDropdown" className="select-items">
-                    <div className="search-container">
-                      <input
-                        type="text"
-                        placeholder="Search country..."
-                        value={countrySearch}
-                        onChange={(e) => setCountrySearch(e.target.value)}
-                        className="dropdown-search"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                    {countries
-                      .filter(country => country.toLowerCase().includes(countrySearch.toLowerCase()))
-                      .map((country, index) => (
-                        <div
-                          key={index}
-                          className={`select-option ${selectedCountry === country ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedCountry(country);
-                            handleCountryChange({ target: { value: country } });
-                            document.getElementById("countryDropdown").classList.remove("show");
-                          }}
-                        >
-                          {country}
-                        </div>
-                      ))}
-                  </div>
-                  <select
-                    value={selectedCountry}
-                    onChange={handleCountryChange}
-                    required
-                    className="hidden-select"
-                  >
-                    <option value="" disabled>Select a Country</option>
-                    {countries.map((country, index) => (
-                      <option key={index} value={country}>{country}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {selectedCountry && (
-                <div className="input-container">
-                  <FaMapMarkerAlt className="input-icon" />
-                  <div className="custom-select">
-                    <div className="select-selected" onClick={() => document.getElementById("cityDropdown").classList.toggle("show")}>
-                      {selectedCity || "Select a City"}
-                    </div>
-                    <div id="cityDropdown" className="select-items">
-                      <div className="search-container">
-                        <input
-                          type="text"
-                          placeholder="Search city..."
-                          value={citySearch}
-                          onChange={(e) => setCitySearch(e.target.value)}
-                          className="dropdown-search"
-                          onClick={(e) => e.stopPropagation()}
-                        />
+              {/* Location Selection - Only shown when location search type is selected */}
+              {searchType === "location" && (
+                <>
+                  <div className="input-container">
+                    <FaMapMarkerAlt className="input-icon" />
+                    <div className="custom-select">
+                      <div className="select-selected" onClick={() => document.getElementById("countryDropdown").classList.toggle("show")}>
+                        {selectedCountry || "Select a Country"}
                       </div>
-                      {cities
-                        .filter(city => city.toLowerCase().includes(citySearch.toLowerCase()))
-                        .map((city, index) => (
-                          <div
-                            key={index}
-                            className={`select-option ${selectedCity === city ? 'selected' : ''}`}
-                            onClick={() => {
-                              setSelectedCity(city);
-                              document.getElementById("cityDropdown").classList.remove("show");
-                            }}
-                          >
-                            {city}
-                          </div>
+                      <div id="countryDropdown" className="select-items">
+                        <div className="search-container">
+                          <input
+                            type="text"
+                            placeholder="Search country..."
+                            value={countrySearch}
+                            onChange={(e) => setCountrySearch(e.target.value)}
+                            className="dropdown-search"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        {countries
+                          .filter(country => country.toLowerCase().includes(countrySearch.toLowerCase()))
+                          .map((country, index) => (
+                            <div
+                              key={index}
+                              className={`select-option ${selectedCountry === country ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedCountry(country);
+                                handleCountryChange({ target: { value: country } });
+                                document.getElementById("countryDropdown").classList.remove("show");
+                              }}
+                            >
+                              {country}
+                            </div>
+                          ))}
+                      </div>
+                      <select
+                        value={selectedCountry}
+                        onChange={handleCountryChange}
+                        required={searchType === "location"}
+                        className="hidden-select"
+                      >
+                        <option value="" disabled>Select a Country</option>
+                        {countries.map((country, index) => (
+                          <option key={index} value={country}>{country}</option>
                         ))}
+                      </select>
                     </div>
-                    <select
-                      value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
-                      required
-                      className="hidden-select"
-                    >
-                      <option value="" disabled>Select a City</option>
-                      {cities.map((city, index) => (
-                        <option key={index} value={city}>{city}</option>
-                      ))}
-                    </select>
                   </div>
-                </div>
+
+                  {selectedCountry && (
+                    <div className="input-container">
+                      <FaMapMarkerAlt className="input-icon" />
+                      <div className="custom-select">
+                        <div className="select-selected" onClick={() => document.getElementById("cityDropdown").classList.toggle("show")}>
+                          {selectedCity || "Select a City"}
+                        </div>
+                        <div id="cityDropdown" className="select-items">
+                          <div className="search-container">
+                            <input
+                              type="text"
+                              placeholder="Search city..."
+                              value={citySearch}
+                              onChange={(e) => setCitySearch(e.target.value)}
+                              className="dropdown-search"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          {cities
+                            .filter(city => city.toLowerCase().includes(citySearch.toLowerCase()))
+                            .map((city, index) => (
+                              <div
+                                key={index}
+                                className={`select-option ${selectedCity === city ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedCity(city);
+                                  document.getElementById("cityDropdown").classList.remove("show");
+                                }}
+                              >
+                                {city}
+                              </div>
+                            ))}
+                        </div>
+                        <select
+                          value={selectedCity}
+                          onChange={(e) => setSelectedCity(e.target.value)}
+                          required={searchType === "location"}
+                          className="hidden-select"
+                        >
+                          <option value="" disabled>Select a City</option>
+                          {cities.map((city, index) => (
+                            <option key={index} value={city}>{city}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Submit Button */}
@@ -463,17 +539,29 @@ const App = () => {
                   <table className="results-table">
                     <thead>
                       <tr>
-                        {['Postal Code', 'Name', 'Address', 'Phone', 'Website', 'Google Maps URL'].map((header) => (
-                          <th key={header} className="table-header">
-                            {header}
-                          </th>
-                        ))}
+                        {/* Dynamic headers based on search type */}
+                        {searchType === "file" ? (
+                          ['Postal Code', 'Name', 'Address', 'Phone', 'Website', 'Google Maps URL', 'City', 'Country'].map((header) => (
+                            <th key={header} className="table-header">
+                              {header}
+                            </th>
+                          ))
+                        ) : (
+                          ['Name', 'Address', 'Phone', 'Website', 'Google Maps URL', 'City', 'Country'].map((header) => (
+                            <th key={header} className="table-header">
+                              {header}
+                            </th>
+                          ))
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {results.map((row, index) => (
                         <tr key={index} className="table-row">
-                          <td className="table-cell">{row["Postal Code"]}</td>
+                          {/* Show postal code only for file-based search */}
+                          {searchType === "file" && (
+                            <td className="table-cell">{row["Postal Code"]}</td>
+                          )}
                           <td className="table-cell">{row.Name}</td>
                           <td className="table-cell">{row.Address}</td>
                           <td className="table-cell">{row.Phone}</td>
@@ -498,21 +586,22 @@ const App = () => {
                               rel="noopener noreferrer"
                               className="table-link"
                             >
-                              Google Maps
+                              Maps URL
                             </a>
                           </td>
+                          <td className="table-cell">{row.City}</td>
+                          <td className="table-cell">{row.Country}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
                 {/* Download Button */}
                 <button
                   onClick={handleDownload}
                   className="download-button"
                 >
-                  <FaFileDownload className="button-icon" /> Download CSV
+                  <FaFileDownload className="button-icon" /> Download as CSV
                 </button>
               </div>
             ) : (

@@ -590,3 +590,48 @@
   position: relative;
   z-index: 100; /* Higher than background elements */
 }
+
+/* Search Type Selection Styles */
+.search-type-selection {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.radio-group {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex: 1;
+  margin: 0 5px;
+  justify-content: center;
+}
+
+.radio-label:first-child {
+  margin-left: 0;
+}
+
+.radio-label:last-child {
+  margin-right: 0;
+}
+
+.radio-label.selected {
+  background-color: rgba(76, 175, 80, 0.1);
+  border-color: #4caf50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.radio-input {
+  margin-right: 8px;
+  accent-color: #4caf50;
+}
