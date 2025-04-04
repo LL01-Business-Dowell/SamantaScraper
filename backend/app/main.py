@@ -331,11 +331,24 @@ def download_results(task_id: str):
         return {"error": "No results found"}
 
     def iter_csv():
-        yield "Postal Code,Name,Address,Phone,Website,URL\n"
+        # Create header row with all columns
+        yield "Postal Code,Name,Address,Phone,Website,URL,City,Country\n"
+        
         for row in tasks[task_id]["results"]:
-            yield f"{row['Postal Code']},{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']},{row['City']},{row['Country']}\n"
+            # Properly escape fields that might contain commas
+            postal_code = f'"{row["Postal Code"]}"'
+            name = f'"{row["Name"]}"'
+            address = f'"{row["Address"]}"'
+            phone = f'"{row["Phone"]}"'
+            website = f'"{row["Website"]}"'
+            url = f'"{row["URL"]}"'
+            city = f'"{row["City"]}"'
+            country = f'"{row["Country"]}"'
+            
+            yield f"{postal_code},{name},{address},{phone},{website},{url},{city},{country}\n"
 
-    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+    return StreamingResponse(iter_csv(), media_type="text/csv", 
+                           headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
 
 @app.get("/download-search/{task_id}")
 def download_search_results(task_id: str):
@@ -343,11 +356,23 @@ def download_search_results(task_id: str):
         return {"error": "No results found"}
 
     def iter_csv():
-        yield "Postal Code,Name,Address,Phone,Website,URL\n"
+        # Correct header with all columns
+        yield "Name,Address,Phone,Website,URL,City,Country\n"
+        
         for row in tasks[task_id]["results"]:
-            yield f"{row['Name']},{row['Address']},{row['Phone']},{row['Website']},{row['URL']},{row['City']},{row['Country']}\n"
+            # Properly escape fields that might contain commas
+            name = f'"{row["Name"]}"'
+            address = f'"{row["Address"]}"'
+            phone = f'"{row["Phone"]}"'
+            website = f'"{row["Website"]}"'
+            url = f'"{row["URL"]}"'
+            city = f'"{row["City"]}"'
+            country = f'"{row["Country"]}"'
+            
+            yield f"{name},{address},{phone},{website},{url},{city},{country}\n"
 
-    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+    return StreamingResponse(iter_csv(), media_type="text/csv", 
+                           headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
 
 if __name__ == "__main__":
     import uvicorn
