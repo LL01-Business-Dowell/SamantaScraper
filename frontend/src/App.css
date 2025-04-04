@@ -360,14 +360,32 @@
 
 /* Results Table */
 .results-table-container {
-  overflow-x: auto;
+  overflow: auto; /* Changed from overflow-x: auto to allow both horizontal and vertical scrolling */
   max-height: 500px;
+  max-width: 100%; /* Ensures the container doesn't exceed its parent's width */
   border-radius: 0.75rem;
   border: 1px solid #374151;
+  position: relative; /* Added to establish a positioning context */
 }
 
 .results-table {
   width: 100%;
+  table-layout: fixed; /* Added to help with column widths */
+}
+
+/* Example for setting specific column widths */
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) {
+  width: 100px; /* Set width for first column */
+  min-width: 100px;
+}
+
+/* If you need to make certain columns non-expandable */
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
 }
 
 .table-header {
@@ -382,6 +400,7 @@
   background-color: #252B3E;
   position: sticky;
   top: 0;
+  z-index: 1; /* Ensure headers stay above content when scrolling */
 }
 
 .table-row {
@@ -393,9 +412,13 @@
   background-color: rgba(31, 41, 55, 0.5);
 }
 
+/* You might need to add this if you have many columns */
 .table-cell {
   padding: 0.75rem 1rem;
   color: #d1d5db;
+  white-space: nowrap; /* Prevents text wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Shows ellipsis for overflowing text */
 }
 
 .table-link {
