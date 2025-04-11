@@ -13,7 +13,7 @@ import json
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import traceback
-
+import requests
 
 app = FastAPI()
 
@@ -269,6 +269,44 @@ def get_cities(country: str):
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+    
+@app.get("/search")
+def search(query: str):
+    try:
+        country_files = [f for f in os.listdir(JSON_FOLDER) if f.endswith(".json")]
+   
+        for filename in country_files:
+            file_path = os.path.join(JSON_FOLDER, filename)
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+                for item in data:
+                    city_name = item.get("ASCII Name", "") or item.get("Name", "")
+                    if query.lower() == city_name.lower():
+                        return {
+                            "match_type": "city name",
+                            "match": item
+                        }
+
+        for filename in country_files:
+            file_path = os.path.join(JSON_FOLDER, filename)
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+                for item in data:
+                    if query.lower() == item.get("Country name EN", "").lower():
+                        return {
+                            "match_type": "country",
+                            "match": item
+                        }
+
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No match found. Please verify your search."}
+        )
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/upload/")
 async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Form(...)):
@@ -376,4 +414,51 @@ def download_search_results(task_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8080)
+
+
+@app.get("/search")
+def search(query: str):
+    try:
+        url = "https://map.uxlivinglab.online/"
+        response = requests.get(url)
+
+        # Debugging: Print raw response content
+        print(f"Raw response text: {response.text}")
+        print(f"Response status code: {response.status_code}")
+
+        if response.status_code != 200:
+            return {"error": "Failed to fetch data"}
+
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            print(f"JSON decode error: {str(e)}")
+            return {"error": "Failed to decode JSON response"}
+
+        # Debugging: Print the data structure
+        print(f"Data received: {data}")
+
+        for item in data:
+            name = item.get("Name", "")
+            ascii_name = item.get("ASCII Name", "")
+            country = item.get("Country name EN", "")
+            alt_names = item.get("Alternate Names", "")
+
+            # Debugging: Print what we're checking
+            print(f"Checking {name}, {ascii_name}, {country}, {alt_names}")
+
+            if (
+                query.lower() in name.lower() or
+                query.lower() in ascii_name.lower() or
+                query.lower() in country.lower() or
+                query.lower() in alt_names.lower()
+            ):
+                return {"match": item}
+
+        return {"error": f"No result found for '{query}'"}
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {"error": f"Internal server error: {str(e)}"}
+
