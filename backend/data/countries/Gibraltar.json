@@ -1,0 +1,25 @@
+[
+    {
+        "Geoname ID": "2411585",
+        "Name": "Gibraltar",
+        "ASCII Name": "Gibraltar",
+        "Alternate Names": "Calpe,Cebelitarik,Cebelitar\u0131k,Djibraltar,GIB,Gibbilterra,Gibilterra,Gibraltar,Gibraltaras,Gibraltaro,Gibralt\u00e1r,G\u00edbraltar,Kamaka,Xibraltar,Xibraltar - Gibraltar,gybrltr,jbl tarq,jibeulolteo,jiburarutaru,mhmyt jbl tarq,zhi bu luo tuo,\u011cibraltaro,\u0393\u03b9\u03b2\u03c1\u03b1\u03bb\u03c4\u03ac\u03c1,\u0413\u0438\u0431\u0440\u0430\u043b\u0442\u0430\u0440,\u0490\u0456\u0431\u0440\u0430\u043b\u0442\u0430\u0440,\u05d2\u05d9\u05d1\u05e8\u05dc\u05d8\u05e8,\u062c\u0628\u0644 \u0637\u0627\u0631\u0642,\u062c\u0628\u0644\u200c\u0627\u0644\u0637\u0627\u0631\u0642,\u0645\u062d\u0645\u064a\u0629 \u062c\u0628\u0644 \u0637\u0627\u0631\u0642,\u30b8\u30d6\u30e9\u30eb\u30bf\u30eb,\u76f4\u5e03\u7f57\u9640,\uc9c0\ube0c\ub864\ud130",
+        "Feature Class": "P",
+        "Feature Code": "PPLC",
+        "Country Code": "GI",
+        "Country name EN": "Gibraltar",
+        "Country Code 2": "",
+        "Admin1 Code": "0",
+        "Admin2 Code": "",
+        "Admin3 Code": "",
+        "Admin4 Code": "",
+        "Population": "26544",
+        "Elevation": "",
+        "DIgital Elevation Model": "11",
+        "Timezone": "Europe/Gibraltar",
+        "Modification date": "Mon Nov 18 2019 05:30:00 GMT+0530 (India Standard Time)",
+        "LABEL EN": "Gibraltar",
+        "latitude": "36.14474",
+        "longitude": "-5.35257"
+    }
+]

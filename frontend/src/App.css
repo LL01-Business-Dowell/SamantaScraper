@@ -1,0 +1,660 @@
+/* Base Styles */
+.app-container {
+  min-height: 100vh;
+  background-color: #121420;
+  color: #f1f1f1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Animated Background */
+.animated-background {
+  position: absolute;
+  inset: 0;
+  background-color: #121420;
+  z-index: 0;
+}
+
+.gradient-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.2;
+  background: linear-gradient(to bottom right, rgba(128, 0, 128, 0.1), rgba(75, 0, 130, 0.1), rgba(0, 0, 128, 0.1));
+  animation: gradient 15s ease infinite;
+}
+
+.dot-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+  background-size: 25px 25px;
+  pointer-events: none;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Content Container */
+.content-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+/* Header */
+.app-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+  backdrop-filter: blur(8px);
+  background-color: rgba(18, 20, 32, 0.8);
+}
+
+.header-container {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo {
+  width: 3rem;
+  height: 3rem;
+  background: linear-gradient(to bottom right, #9333ea, #4f46e5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(to right, #a78bfa, #818cf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.app-badge {
+  background-color: rgba(31, 41, 55, 0.5);
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+}
+
+.app-badge span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+/* Main Content */
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .main-content {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Form Container */
+.form-container {
+  background-color: #1A1E2E;
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(31, 41, 55, 0.5);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.gradient-border {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom right, rgba(128, 0, 128, 0.2), rgba(75, 0, 130, 0.2), rgba(0, 0, 128, 0.2));
+  opacity: 0.5;
+  z-index: -10;
+}
+
+.scraper-form {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* File Upload */
+.file-upload {
+  display: flex;
+  flex-direction: column;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.upload-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to right, #9333ea, #4f46e5);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.upload-button:hover {
+  transform: scale(1.02);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.button-icon {
+  margin-right: 0.75rem;
+  font-size: 1.125rem;
+}
+
+.button-icon-small {
+  margin-right: 0.5rem;
+}
+
+.file-name {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 0.75rem;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  background-color: #1f2937;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+/* Input Container */
+.input-container {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  color: #f1f1f1;
+  border-radius: 0.75rem;
+  outline: none;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.form-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.5);
+  border-color: #9333ea;
+}
+
+/* Buttons */
+.submit-button {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  background: linear-gradient(to right, #9333ea, #4f46e5);
+  color: white;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.submit-button:hover:not(.disabled) {
+  background: linear-gradient(to right, #7e22ce, #4338ca);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.submit-button.disabled {
+  background-color: #374151;
+  cursor: not-allowed;
+}
+
+.reset-button {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+  background-color: #1f2937;
+  color: #d1d5db;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+}
+
+.reset-button:hover {
+  background-color: #374151;
+}
+
+.download-button {
+  width: 100%;
+  padding: 0.75rem;
+  background: linear-gradient(to right, #9333ea, #4f46e5);
+  color: white;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.download-button:hover {
+  background: linear-gradient(to right, #7e22ce, #4338ca);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Progress Bar */
+.progress-container {
+  margin-top: 1.5rem;
+}
+
+.progress-bar-container {
+  width: 100%;
+  background-color: #1f2937;
+  border-radius: 9999px;
+  height: 0.5rem;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: linear-gradient(to right, #9333ea, #4f46e5);
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.5s ease-in-out;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.progress-text {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.cancel-button {
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+.cancel-button:hover {
+  color: #dc2626;
+}
+
+/* Results Container */
+.results-container {
+  background-color: #1A1E2E;
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(31, 41, 55, 0.5);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Results Table */
+.results-table-container {
+  overflow: auto; /* Changed from overflow-x: auto to allow both horizontal and vertical scrolling */
+  max-height: 500px;
+  max-width: 100%; /* Ensures the container doesn't exceed its parent's width */
+  border-radius: 0.75rem;
+  border: 1px solid #374151;
+  position: relative; /* Added to establish a positioning context */
+}
+
+.results-table {
+  width: 100%;
+  table-layout: fixed; /* Added to help with column widths */
+}
+
+/* Example for setting specific column widths */
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) {
+  width: 100px; /* Set width for first column */
+  min-width: 100px;
+}
+
+/* If you need to make certain columns non-expandable */
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+}
+
+.table-header {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #374151;
+  background-color: #252B3E;
+  position: sticky;
+  top: 0;
+  z-index: 1; /* Ensure headers stay above content when scrolling */
+}
+
+.table-row {
+  border-bottom: 1px solid #1f2937;
+  transition: background-color 0.3s;
+}
+
+.table-row:hover {
+  background-color: rgba(31, 41, 55, 0.5);
+}
+
+/* You might need to add this if you have many columns */
+.table-cell {
+  padding: 0.75rem 1rem;
+  color: #d1d5db;
+  white-space: nowrap; /* Prevents text wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Shows ellipsis for overflowing text */
+}
+
+.table-link {
+  color: #a78bfa;
+  transition: color 0.3s;
+}
+
+.table-link:hover {
+  color: #9333ea;
+  text-decoration: underline;
+}
+
+.not-available {
+  color: #6b7280;
+}
+
+/* Empty Results */
+.empty-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-icon {
+  font-size: 6rem;
+  margin-bottom: 1rem;
+  opacity: 0.2;
+}
+
+.empty-text {
+  font-size: 1.25rem;
+  font-weight: 300;
+}
+
+/* Custom Select Dropdown with Search */
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-selected {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  color: #f1f1f1;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.select-selected:hover {
+  background-color: #252b3e;
+}
+
+.select-selected:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.5);
+  border-color: #9333ea;
+}
+
+.select-items {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  max-height: 0;
+  overflow-y: auto;
+  opacity: 0;
+  background-color: #1A1E2E;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+  visibility: hidden;
+  border: 1px solid #374151;
+  margin-top: 0.5rem;
+}
+
+.select-items.show {
+  max-height: 300px;
+  opacity: 1;
+  visibility: visible;
+}
+
+.search-container {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.75rem;
+  background-color: #252B3E;
+  border-bottom: 1px solid #374151;
+}
+
+.dropdown-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  outline: none;
+  background-color: #1f2937;
+  color: #f1f1f1;
+  font-size: 0.875rem;
+}
+
+.dropdown-search:focus {
+  border-color: #9333ea;
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.2);
+}
+
+.select-option {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #d1d5db;
+}
+
+.select-option:hover {
+  background-color: #252B3E;
+}
+
+.select-option.selected {
+  background-color: rgba(147, 51, 234, 0.2);
+  font-weight: 500;
+  color: #f1f1f1;
+}
+
+.hidden-select {
+  display: none;
+}
+
+/* Style the scrollbar in the dropdown */
+.select-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.select-items::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 3px;
+}
+
+.select-items::-webkit-scrollbar-thumb {
+  background: #4f46e5;
+  border-radius: 3px;
+}
+
+.select-items::-webkit-scrollbar-thumb:hover {
+  background: #9333ea;
+}
+
+/* Update these properties in the .select-items class */
+.select-items {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 9999; /* Higher z-index to ensure it's on top */
+  max-height: 0;
+  overflow-y: auto;
+  opacity: 0;
+  background-color: #1A1E2E;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+  visibility: hidden;
+  border: 1px solid #374151;
+  margin-top: 0.5rem;
+  /* Remove any overflow restrictions */
+}
+
+.select-items.show {
+  max-height: 300px;
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Add this to ensure the dropdown container doesn't clip */
+.form-container {
+  overflow: visible; /* Changed from 'overflow: hidden' */
+}
+
+.results-container {
+  overflow: visible; /* Changed from 'overflow: hidden' */
+}
+
+/* Make sure the container that holds the form has a higher z-index than the background elements */
+.content-container {
+  position: relative;
+  z-index: 100; /* Higher than background elements */
+}
+
+/* Search Type Selection Styles */
+.search-type-selection {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.radio-group {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex: 1;
+  margin: 0 5px;
+  justify-content: center;
+}
+
+.radio-label:first-child {
+  margin-left: 0;
+}
+
+.radio-label:last-child {
+  margin-right: 0;
+}
+
+.radio-label.selected {
+  background-color: rgba(76, 175, 80, 0.1);
+  border-color: #4caf50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.radio-input {
+  margin-right: 8px;
+  accent-color: #4caf50;
+}
