@@ -20,7 +20,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173",
-                   "map.uxlivinglab.online"],  # React frontend URL
+                   "https://map.uxlivinglab.online"],  # React frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -222,7 +222,10 @@ def scrape_google_maps_location(task_id, keyword, country, city):
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
 
-
+@app.get("/status")
+def get_status():
+    return {"status" : "running"}
+    
 @app.get("/countries")
 def get_countries():
     try:
