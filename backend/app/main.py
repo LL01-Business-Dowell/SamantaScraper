@@ -1,19 +1,24 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import StreamingResponse
 import pandas as pd
 import time
 import threading
 import re
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
 import os
 import json
+import traceback
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import traceback
-import requests
+from contextlib import contextmanager
+from typing import List, Dict, Any, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -31,217 +36,275 @@ tasks = {}
 
 def clean_text(text):
     """Removes special characters and excessive whitespace from text."""
+    if not text:
+        return ""
     return re.sub(r'[^\w\s,.-]', '', text).strip()
 
 
+@contextmanager
 def init_driver():
-    """Initializes and returns a Selenium WebDriver instance."""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--window-size=1920,1080")
+    """Initializes and returns a Selenium WebDriver instance within a context manager."""
+    driver = None
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
+        
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--window-size=1920,1080")
 
-    # Docker-specific ChromeDriver configuration
-    options.binary_location = os.getenv(
-        "GOOGLE_CHROME_BIN", "/usr/bin/google-chrome")
-    service = Service(os.getenv("CHROMEDRIVER_PATH",
-                      "/usr/local/bin/chromedriver"))
-
-    # ✅ Added return statement
-    return webdriver.Chrome(service=service, options=options)
+        # Docker-specific ChromeDriver configuration
+        chrome_binary = os.getenv("GOOGLE_CHROME_BIN", "/usr/bin/google-chrome")
+        chromedriver_path = os.getenv("CHROMEDRIVER_PATH", "/usr/local/bin/chromedriver")
+        
+        logger.info(f"Using Chrome binary at: {chrome_binary}")
+        logger.info(f"Using ChromeDriver at: {chromedriver_path}")
+        
+        options.binary_location = chrome_binary
+        service = Service(chromedriver_path)
+        
+        driver = webdriver.Chrome(service=service, options=options)
+        yield driver
+    except Exception as e:
+        logger.error(f"Failed to initialize WebDriver: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception as e:
+                logger.error(f"Error closing WebDriver: {str(e)}")
 
 
 def scrape_google_maps(task_id, location_data, keyword):
-    driver = init_driver()
-    results = []
+    """Thread function to scrape Google Maps based on location data."""
+    try:
+        with init_driver() as driver:
+            results = []
 
-    for idx, (postal_code, city, country) in enumerate(location_data):
-        if not tasks.get(task_id, {}).get("running", False):
-            print(f"Task {task_id} canceled. Exiting scraping process.")
-            driver.quit()
-            return 
-
-        search_query = f"{keyword} in {postal_code}, {city}, {country}"
-        google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
-
-        try:
-            driver.get(google_maps_url)
-            time.sleep(3)
-
-            business_links = []
-            elements = driver.find_elements(
-                By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
-            business_links = [e.get_attribute("href") for e in elements[:20]]
-
-            for url in business_links:
+            for idx, (postal_code, city, country) in enumerate(location_data):
                 if not tasks.get(task_id, {}).get("running", False):
-                    print(
-                        f"Task {task_id} canceled. Exiting business details extraction.")
-                    driver.quit()
-                    return 
+                    logger.info(f"Task {task_id} canceled. Exiting scraping process.")
+                    return
 
-                driver.get(url)
-                time.sleep(2)
+                search_query = f"{keyword} in {postal_code}, {city}, {country}"
+                google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
 
                 try:
-                    name = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, "h1").text)
-                    address = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-item-id="address"]').text)
-                    phone = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+                    logger.info(f"Searching: {google_maps_url}")
+                    driver.get(google_maps_url)
+                    time.sleep(3)
 
-                    website = "Not Available"
-                    website_element = driver.find_element(
-                        By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
-                    if website_element:
-                        website = clean_text(
-                            website_element.get_attribute("href"))
+                    from selenium.webdriver.common.by import By
+                    
+                    business_links = []
+                    elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+                    business_links = [e.get_attribute("href") for e in elements[:20]]
 
-                    results.append({
-                        "Postal Code": postal_code,
-                        "Name": name,
-                        "Address": address,
-                        "Phone": phone,
-                        "Website": website,
-                        "URL": url,
-                        "City": city,
-                        "Country": country
-                    })
+                    for url in business_links:
+                        if not tasks.get(task_id, {}).get("running", False):
+                            logger.info(f"Task {task_id} canceled. Exiting business details extraction.")
+                            return
+
+                        driver.get(url)
+                        time.sleep(2)
+
+                        try:
+                            name = clean_text(driver.find_element(By.CSS_SELECTOR, "h1").text)
+                            
+                            # Use safer methods to find elements that might not exist
+                            address = "Not Available"
+                            try:
+                                address_elem = driver.find_element(By.CSS_SELECTOR, '[data-item-id="address"]')
+                                address = clean_text(address_elem.text)
+                            except Exception:
+                                logger.warning(f"Address not found for {url}")
+                            
+                            phone = "Not Available"
+                            try:
+                                phone_elem = driver.find_element(By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]')
+                                phone = clean_text(phone_elem.text)
+                            except Exception:
+                                logger.warning(f"Phone not found for {url}")
+
+                            website = "Not Available"
+                            try:
+                                website_element = driver.find_element(By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                                website = clean_text(website_element.get_attribute("href"))
+                            except Exception:
+                                logger.warning(f"Website not found for {url}")
+
+                            results.append({
+                                "Postal Code": postal_code,
+                                "Name": name,
+                                "Address": address,
+                                "Phone": phone,
+                                "Website": website,
+                                "URL": url,
+                                "City": city,
+                                "Country": country
+                            })
+                        except Exception as e:
+                            logger.error(f"Error processing business {url}: {str(e)}")
+                            continue
+
                 except Exception as e:
-                    print(f"Error processing business {url}: {e}")
+                    logger.error(f"Error accessing {google_maps_url}: {str(e)}")
                     continue
 
-        except Exception as e:
-            print(f"Error accessing {google_maps_url}: {e}")
-            continue 
+                tasks[task_id]["progress"] = (idx + 1) / len(location_data) * 100
+                tasks[task_id]["results"] = results
 
-        tasks[task_id]["progress"] = (idx + 1) / len(location_data) * 100
-        tasks[task_id]["results"] = results
-
-    driver.quit()
-    tasks[task_id]["running"] = False
+    except Exception as e:
+        logger.error(f"Error in scrape_google_maps for task {task_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+    finally:
+        tasks[task_id]["running"] = False
 
 
 def scrape_google_maps_location(task_id, keyword, country, city):
-    driver = init_driver()
-
-    if not tasks.get(task_id, {}).get("running", False):
-        print(f"Task {task_id} canceled. Exiting scraping process.")
-        driver.quit()
-        return 
-
-    search_query = f"{keyword} in {city}, {country}"
-    google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
-
+    """Thread function to scrape Google Maps based on location."""
     try:
-        driver.get(google_maps_url)
-        time.sleep(3)
-
-        extracted_urls = set()
-        results = []
-        total_count = 0
-
-        while True:
+        with init_driver() as driver:
             if not tasks.get(task_id, {}).get("running", False):
-                print(f"Task {task_id} canceled. Exiting scraping process.")
-                driver.quit()
+                logger.info(f"Task {task_id} canceled. Exiting scraping process.")
                 return
 
-            elements = driver.find_elements(
-                By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
-            new_links = {e.get_attribute("href")
-                         for e in elements} - extracted_urls
+            search_query = f"{keyword} in {city}, {country}"
+            google_maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
 
-            for url in new_links:
-                if not tasks.get(task_id, {}).get("running", False):
-                    print(
-                        f"Task {task_id} canceled. Exiting business details extraction.")
-                    driver.quit()
-                    return 
+            try:
+                from selenium.webdriver.common.by import By
+                
+                logger.info(f"Searching location: {google_maps_url}")
+                driver.get(google_maps_url)
+                time.sleep(3)
 
-                extracted_urls.add(url)
+                extracted_urls = set()
+                results = []
+                total_count = 0
 
-                driver.get(url)
-                time.sleep(2)
+                for _ in range(10):  # Limit the number of scrolls to avoid infinite loops
+                    if not tasks.get(task_id, {}).get("running", False):
+                        logger.info(f"Task {task_id} canceled. Exiting scraping process.")
+                        return
 
-                try:
-                    name = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, "h1").text)
-                    address = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-item-id="address"]').text)
-                    phone = clean_text(driver.find_element(
-                        By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]').text)
+                    elements = driver.find_elements(By.CSS_SELECTOR, 'a[href*="/maps/place/"]')
+                    new_links = {e.get_attribute("href") for e in elements} - extracted_urls
 
-                    website = "Not Available"
-                    website_element = driver.find_elements(
-                        By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
-                    if website_element:
-                        website = clean_text(
-                            website_element[0].get_attribute("href"))
+                    for url in new_links:
+                        if not tasks.get(task_id, {}).get("running", False):
+                            logger.info(f"Task {task_id} canceled. Exiting business details extraction.")
+                            return
 
-                    business_data = {
-                        "Name": name,
-                        "Address": address,
-                        "Phone": phone,
-                        "Website": website,
-                        "URL": url,
-                        "City": city,
-                        "Country": country
-                    }
-                    results.append(business_data)
+                        extracted_urls.add(url)
 
-                    total_count += 1
-                    tasks[task_id]["progress"] = total_count
-                    tasks[task_id]["results"] = results
+                        driver.get(url)
+                        time.sleep(2)
 
-                except Exception as e:
-                    print(f"Error processing business {url}: {e}")
-                    continue 
+                        try:
+                            name = clean_text(driver.find_element(By.CSS_SELECTOR, "h1").text)
+                            
+                            # Use safer methods to find elements that might not exist
+                            address = "Not Available"
+                            try:
+                                address_elem = driver.find_element(By.CSS_SELECTOR, '[data-item-id="address"]')
+                                address = clean_text(address_elem.text)
+                            except Exception:
+                                logger.warning(f"Address not found for {url}")
+                            
+                            phone = "Not Available"
+                            try:
+                                phone_elem = driver.find_element(By.CSS_SELECTOR, '[data-tooltip="Copy phone number"]')
+                                phone = clean_text(phone_elem.text)
+                            except Exception:
+                                logger.warning(f"Phone not found for {url}")
 
-            if elements:
-                driver.execute_script(
-                    "arguments[0].scrollIntoView();", elements[-1])
-                time.sleep(2) 
+                            website = "Not Available"
+                            try:
+                                website_elements = driver.find_elements(By.CSS_SELECTOR, 'a[href^="http"][data-item-id="authority"]')
+                                if website_elements:
+                                    website = clean_text(website_elements[0].get_attribute("href"))
+                            except Exception:
+                                logger.warning(f"Website not found for {url}")
 
-            end_marker = driver.find_elements(
-                By.XPATH, "//div[contains(text(), 'You\'ve reached the end of the list.')]")
-            if end_marker:
-                print("Reached the end of search results.")
-                break
+                            business_data = {
+                                "Name": name,
+                                "Address": address,
+                                "Phone": phone,
+                                "Website": website,
+                                "URL": url,
+                                "City": city,
+                                "Country": country
+                            }
+                            results.append(business_data)
+
+                            total_count += 1
+                            tasks[task_id]["progress"] = total_count
+                            tasks[task_id]["results"] = results
+
+                        except Exception as e:
+                            logger.error(f"Error processing business {url}: {str(e)}")
+                            continue
+
+                    if elements:
+                        driver.execute_script("arguments[0].scrollIntoView();", elements[-1])
+                        time.sleep(2)
+
+                    end_marker = driver.find_elements(By.XPATH, "//div[contains(text(), 'You\'ve reached the end of the list.')]")
+                    if end_marker:
+                        logger.info("Reached the end of search results.")
+                        break
+
+            except Exception as e:
+                logger.error(f"Error accessing {google_maps_url}: {str(e)}")
 
     except Exception as e:
-        print(f"Error accessing {google_maps_url}: {e}")
+        logger.error(f"Error in scrape_google_maps_location for task {task_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+    finally:
+        tasks[task_id]["running"] = False
+        logger.info(f"Task {task_id} completed.")
 
-    driver.quit()
-    tasks[task_id]["running"] = False
-    print(f"Task {task_id} completed successfully.")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
 
+
 @app.get("/status")
 def get_status():
-    return {"status" : "running"}
-    
+    return {"status": "running"}
+
+
 @app.get("/countries")
 def get_countries():
     try:
-        countries = sorted(
-            [f[:-5] for f in os.listdir(JSON_FOLDER) if f.endswith(".json")])
+        if not os.path.exists(JSON_FOLDER):
+            logger.error(f"JSON_FOLDER does not exist: {JSON_FOLDER}")
+            return JSONResponse(status_code=500, content={"error": f"JSON_FOLDER not found: {JSON_FOLDER}"})
+            
+        countries = sorted([f[:-5] for f in os.listdir(JSON_FOLDER) if f.endswith(".json")])
         return {"countries": countries}
 
     except Exception as e:
+        logger.error(f"Error in get_countries: {str(e)}")
+        logger.error(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.get("/cities/{country}")
 def get_cities(country: str):
     try:
-        country_files = {f.lower(): f for f in os.listdir(
-            JSON_FOLDER) if f.endswith(".json")}
+        if not os.path.exists(JSON_FOLDER):
+            logger.error(f"JSON_FOLDER does not exist: {JSON_FOLDER}")
+            return JSONResponse(status_code=500, content={"error": f"JSON_FOLDER not found: {JSON_FOLDER}"})
+
+        country_files = {f.lower(): f for f in os.listdir(JSON_FOLDER) if f.endswith(".json")}
 
         country_filename = country.lower() + ".json"
         if country_filename not in country_files:
@@ -255,8 +318,7 @@ def get_cities(country: str):
         cities = [
             city["ASCII Name"]
             for city in data
-            # Convert population to int
-            if int(city.get("Population", 0)) > 100000
+            if int(city.get("Population", "0").replace(",", "")) > 100000
         ]
 
         if not cities:
@@ -265,203 +327,189 @@ def get_cities(country: str):
         return {"cities": cities}
 
     except ValueError as e:
+        logger.error(f"Invalid population data: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Invalid population data: {str(e)}"})
 
     except json.JSONDecodeError:
+        logger.error(f"Invalid JSON format in file: {file_path}")
         return JSONResponse(status_code=500, content={"error": "Invalid JSON format in file"})
 
     except Exception as e:
+        logger.error(f"Error in get_cities: {str(e)}")
+        logger.error(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
-    
-@app.get("/search")
-def search(query: str):
-    try:
-        country_files = [f for f in os.listdir(JSON_FOLDER) if f.endswith(".json")]
-   
-        for filename in country_files:
-            file_path = os.path.join(JSON_FOLDER, filename)
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
 
-                for item in data:
-                    city_name = item.get("ASCII Name", "") or item.get("Name", "")
-                    if query.lower() == city_name.lower():
-                        return {
-                            "match_type": "city name",
-                            "match": item
-                        }
-
-        for filename in country_files:
-            file_path = os.path.join(JSON_FOLDER, filename)
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-                for item in data:
-                    if query.lower() == item.get("Country name EN", "").lower():
-                        return {
-                            "match_type": "country",
-                            "match": item
-                        }
-
-        return JSONResponse(
-            status_code=404,
-            content={"error": "No match found. Please verify your search."}
-        )
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/upload/")
-async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Form(...)):
-    task_id = str(time.time())
-    df = pd.read_csv(file.file)
+async def upload_csv(file: UploadFile = File(...), keyword: str = Form(...), email: str = Form(...)):
+    try:
+        task_id = str(time.time())
+        
+        # Add some logging
+        logger.info(f"Starting upload task {task_id}")
+        logger.info(f"File: {file.filename}, Keyword: {keyword}, Email: {email}")
+        
+        # Validate file
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+            
+        # Read CSV with better error handling
+        try:
+            contents = await file.read()
+            df = pd.read_csv(pd.io.common.BytesIO(contents))
+            file.file.close()  # Close the file after reading
+        except Exception as e:
+            logger.error(f"Error reading CSV: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Error reading CSV file: {str(e)}")
 
-    location_data = []
-    for index, row in df.iterrows():
-        postal_code = str(row.iloc[0]) if not pd.isna(row.iloc[0]) else ""
-        city = str(row.iloc[1]) if not pd.isna(row.iloc[1]) else ""
-        country = str(row.iloc[2]) if not pd.isna(row.iloc[2]) else ""
+        # Validate CSV structure
+        required_columns = 3  # Postal code, city, country
+        if df.shape[1] < required_columns:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"CSV must have at least {required_columns} columns: postal code, city, country"
+            )
 
-        location_data.append([postal_code, city, country])
+        location_data = []
+        for index, row in df.iterrows():
+            postal_code = str(row.iloc[0]) if not pd.isna(row.iloc[0]) else ""
+            city = str(row.iloc[1]) if not pd.isna(row.iloc[1]) else ""
+            country = str(row.iloc[2]) if not pd.isna(row.iloc[2]) else ""
 
-    tasks[task_id] = {"running": True, "progress": 0, "results": []}
+            location_data.append([postal_code, city, country])
 
-    threading.Thread(target=scrape_google_maps, args=(
-        task_id, location_data, keyword)).start()
+        tasks[task_id] = {"running": True, "progress": 0, "results": []}
 
-    return {"message": "Processing started", "task_id": task_id}
+        # Start scraping in a separate thread
+        threading.Thread(target=scrape_google_maps, args=(task_id, location_data, keyword), daemon=True).start()
+
+        return {"message": "Processing started", "task_id": task_id}
+    
+    except HTTPException:
+        raise  # Re-raise HTTPExceptions as they're already formatted correctly
+    except Exception as e:
+        logger.error(f"Unhandled error in upload_csv: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": f"An unexpected error occurred: {str(e)}"})
 
 
 @app.post("/search-by-location/")
-async def upload_csv(keyword: str = Form(...), country: str = Form(...), city: str = Form(...), email: str = Form(...)):
-    task_id = str(time.time())
+async def search_by_location(keyword: str = Form(...), country: str = Form(...), city: str = Form(...), email: str = Form(...)):
+    try:
+        task_id = str(time.time())
+        
+        # Add some logging
+        logger.info(f"Starting location search task {task_id}")
+        logger.info(f"Keyword: {keyword}, Country: {country}, City: {city}, Email: {email}")
 
-    tasks[task_id] = {"running": True, "progress": 0, "results": []}
+        # Validate inputs
+        if not keyword or not country or not city:
+            raise HTTPException(status_code=400, detail="Keyword, country, and city are required")
 
-    threading.Thread(target=scrape_google_maps_location, args=(
-        task_id, keyword, country, city)).start()
+        tasks[task_id] = {"running": True, "progress": 0, "results": []}
 
-    return {"message": "Processing started", "task_id": task_id}
+        # Start scraping in a separate thread
+        threading.Thread(target=scrape_google_maps_location, args=(task_id, keyword, country, city), daemon=True).start()
+
+        return {"message": "Processing started", "task_id": task_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unhandled error in search_by_location: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": f"An unexpected error occurred: {str(e)}"})
 
 
 @app.get("/progress/{task_id}")
 async def get_progress(task_id: str):
-    if task_id in tasks:
-        task = tasks[task_id]
-        return {
-            "progress": task.get("progress", 0),
-            "results": task.get("results", []),
-            "running": task.get("running", False),
-        }
-    return {"error": "Task not found"}
+    try:
+        if task_id in tasks:
+            task = tasks[task_id]
+            return {
+                "progress": task.get("progress", 0),
+                "results": task.get("results", []),
+                "running": task.get("running", False),
+            }
+        return JSONResponse(status_code=404, content={"error": "Task not found"})
+    except Exception as e:
+        logger.error(f"Error fetching progress for task {task_id}: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"An error occurred: {str(e)}"})
 
 
 @app.post("/cancel/{task_id}")
 def cancel_task(task_id: str):
-    if task_id in tasks:
-        tasks[task_id]["running"] = False 
-        time.sleep(1) 
-        del tasks[task_id]
-        return {"message": f"Task {task_id} has been canceled"}
-    return JSONResponse(status_code=404, content={"error": "Task not found"})
+    try:
+        if task_id in tasks:
+            tasks[task_id]["running"] = False
+            time.sleep(1)
+            del tasks[task_id]
+            return {"message": f"Task {task_id} has been canceled"}
+        return JSONResponse(status_code=404, content={"error": "Task not found"})
+    except Exception as e:
+        logger.error(f"Error canceling task {task_id}: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"An error occurred: {str(e)}"})
 
 
 @app.get("/download/{task_id}")
 def download_results(task_id: str):
-    if task_id not in tasks or not tasks[task_id]["results"]:
-        return {"error": "No results found"}
+    try:
+        if task_id not in tasks or not tasks[task_id]["results"]:
+            return JSONResponse(status_code=404, content={"error": "No results found"})
 
-    def iter_csv():
-        # Create header row with all columns
-        yield "Postal Code,Name,Address,Phone,Website,URL,City,Country\n"
-        
-        for row in tasks[task_id]["results"]:
-            # Properly escape fields that might contain commas
-            postal_code = f'"{row["Postal Code"]}"'
-            name = f'"{row["Name"]}"'
-            address = f'"{row["Address"]}"'
-            phone = f'"{row["Phone"]}"'
-            website = f'"{row["Website"]}"'
-            url = f'"{row["URL"]}"'
-            city = f'"{row["City"]}"'
-            country = f'"{row["Country"]}"'
+        def iter_csv():
+            # Create header row with all columns
+            yield "Postal Code,Name,Address,Phone,Website,URL,City,Country\n"
             
-            yield f"{postal_code},{name},{address},{phone},{website},{url},{city},{country}\n"
+            for row in tasks[task_id]["results"]:
+                # Properly escape fields that might contain commas
+                postal_code = f'"{row["Postal Code"]}"'
+                name = f'"{row["Name"]}"'
+                address = f'"{row["Address"]}"'
+                phone = f'"{row["Phone"]}"'
+                website = f'"{row["Website"]}"'
+                url = f'"{row["URL"]}"'
+                city = f'"{row["City"]}"'
+                country = f'"{row["Country"]}"'
+                
+                yield f"{postal_code},{name},{address},{phone},{website},{url},{city},{country}\n"
 
-    return StreamingResponse(iter_csv(), media_type="text/csv", 
-                           headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+        return StreamingResponse(iter_csv(), media_type="text/csv", 
+                               headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+    except Exception as e:
+        logger.error(f"Error downloading results for task {task_id}: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"An error occurred: {str(e)}"})
+
 
 @app.get("/download-search/{task_id}")
 def download_search_results(task_id: str):
-    if task_id not in tasks or not tasks[task_id]["results"]:
-        return {"error": "No results found"}
+    try:
+        if task_id not in tasks or not tasks[task_id]["results"]:
+            return JSONResponse(status_code=404, content={"error": "No results found"})
 
-    def iter_csv():
-        # Correct header with all columns
-        yield "Name,Address,Phone,Website,URL,City,Country\n"
-        
-        for row in tasks[task_id]["results"]:
-            # Properly escape fields that might contain commas
-            name = f'"{row["Name"]}"'
-            address = f'"{row["Address"]}"'
-            phone = f'"{row["Phone"]}"'
-            website = f'"{row["Website"]}"'
-            url = f'"{row["URL"]}"'
-            city = f'"{row["City"]}"'
-            country = f'"{row["Country"]}"'
+        def iter_csv():
+            # Correct header with all columns
+            yield "Name,Address,Phone,Website,URL,City,Country\n"
             
-            yield f"{name},{address},{phone},{website},{url},{city},{country}\n"
+            for row in tasks[task_id]["results"]:
+                # Properly escape fields that might contain commas
+                name = f'"{row["Name"]}"'
+                address = f'"{row["Address"]}"'
+                phone = f'"{row["Phone"]}"'
+                website = f'"{row["Website"]}"'
+                url = f'"{row["URL"]}"'
+                city = f'"{row["City"]}"'
+                country = f'"{row["Country"]}"'
+                
+                yield f"{name},{address},{phone},{website},{url},{city},{country}\n"
 
-    return StreamingResponse(iter_csv(), media_type="text/csv", 
-                           headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+        return StreamingResponse(iter_csv(), media_type="text/csv", 
+                               headers={"Content-Disposition": f"attachment; filename=results_{task_id}.csv"})
+    except Exception as e:
+        logger.error(f"Error downloading search results for task {task_id}: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"An error occurred: {str(e)}"})
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8080)
-
-
-@app.get("/search")
-def search(query: str):
-    try:
-        url = "https://map.uxlivinglab.online/"
-        response = requests.get(url)
-
-        # Debugging: Print raw response content
-        print(f"Raw response text: {response.text}")
-        print(f"Response status code: {response.status_code}")
-
-        if response.status_code != 200:
-            return {"error": "Failed to fetch data"}
-
-        try:
-            data = response.json()
-        except requests.exceptions.JSONDecodeError as e:
-            print(f"JSON decode error: {str(e)}")
-            return {"error": "Failed to decode JSON response"}
-
-        # Debugging: Print the data structure
-        print(f"Data received: {data}")
-
-        for item in data:
-            name = item.get("Name", "")
-            ascii_name = item.get("ASCII Name", "")
-            country = item.get("Country name EN", "")
-            alt_names = item.get("Alternate Names", "")
-
-            # Debugging: Print what we're checking
-            print(f"Checking {name}, {ascii_name}, {country}, {alt_names}")
-
-            if (
-                query.lower() in name.lower() or
-                query.lower() in ascii_name.lower() or
-                query.lower() in country.lower() or
-                query.lower() in alt_names.lower()
-            ):
-                return {"match": item}
-
-        return {"error": f"No result found for '{query}'"}
-
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {"error": f"Internal server error: {str(e)}"}
-
+    uvicorn.run(app, host="0.0.0.0", port=8000)
