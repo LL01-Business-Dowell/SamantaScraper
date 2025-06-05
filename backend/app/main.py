@@ -219,58 +219,71 @@ def extract_restaurant_details(driver, url, task_id):
     }
 
     try:
-        # Wait for page to be fully loaded
+        # Wait for page to be fully loaded with better conditions
         WebDriverWait(driver, 20).until(
             EC.any_of(
-                EC.presence_of_element_located((By.XPATH, "//h1")),
-                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-value='Title']")),
-                EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'lMbq3e')]"))
+                EC.presence_of_element_located((By.XPATH, "//h1[contains(@class, 'DUwDvf')]")),
+                EC.presence_of_element_located((By.XPATH, "//div[@data-value='Title']")),
+                EC.presence_of_element_located((By.XPATH, "//h1[@data-attrid='title']"))
             )
         )
 
-        # Extract name with multiple selectors
+        # Extract name with improved validation
         name_selectors = [
-            "//h1[contains(@class, 'DUwDvf')]",
-            "//h1[@class='x3AX1-LfntMc-header-title-title']",
-            "//div[@data-value='Title']//span",
-            "//h1",
-            "//div[contains(@class, 'lMbq3e')]//span[1]"
+            "//h1[contains(@class, 'DUwDvf') and not(contains(@class, 'review'))]",
+            "//h1[@data-attrid='title']",
+            "//div[@data-value='Title']//span[not(contains(text(), 'Results')) and not(contains(text(), 'reviews'))]",
+            "//h1[not(contains(text(), 'Results')) and not(contains(text(), 'Map data'))]"
         ]
         
         for selector in name_selectors:
             try:
                 name_elem = driver.find_element(By.XPATH, selector)
                 if name_elem and name_elem.text.strip():
-                    details["Name"] = clean_text(name_elem.text)
-                    log_message(f"✓ Found name: {details['Name']}")
-                    break
+                    name_text = clean_text(name_elem.text)
+                    # Validate that it's not a generic result
+                    if (name_text and 
+                        name_text.lower() not in ['results', 'map data', 'google', 'maps'] and
+                        len(name_text) > 2 and
+                        not name_text.isdigit()):
+                        details["Name"] = name_text
+                        log_message(f"✓ Found name: {details['Name']}")
+                        break
             except:
                 continue
 
-        # Extract address with improved selectors
+        # If no valid name found, this is likely not a business page
+        if details["Name"] == "N/A":
+            log_message("❌ No valid business name found, skipping...")
+            return details
+
+        # Extract address with better validation
         address_selectors = [
             "//button[@data-item-id='address']//div[contains(@class, 'fontBodyMedium')]",
-            "//div[@data-value='Address']//span",
-            "//button[contains(@aria-label, 'Address')]//div",
-            "//div[contains(@class, 'Io6YTe') and contains(text(), ',')]"
+            "//div[@data-value='Address']//span[contains(text(), ',')]",
+            "//button[contains(@aria-label, 'Address')]//div[contains(text(), ',')]",
+            "//div[contains(@class, 'Io6YTe') and contains(text(), ',') and not(contains(text(), 'reviews'))]"
         ]
         
         for selector in address_selectors:
             try:
                 address_elem = driver.find_element(By.XPATH, selector)
                 if address_elem and address_elem.text.strip():
-                    details["Address"] = clean_text(address_elem.text)
-                    log_message(f"✓ Found address: {details['Address']}")
-                    break
+                    address_text = clean_text(address_elem.text)
+                    # Validate address format
+                    if address_text and ',' in address_text and len(address_text) > 10:
+                        details["Address"] = address_text
+                        log_message(f"✓ Found address: {details['Address']}")
+                        break
             except:
                 continue
 
-        # Extract phone with better selectors
+        # Extract phone with strict validation
         phone_selectors = [
             "//button[@data-item-id='phone:tel:']//div[contains(@class, 'fontBodyMedium')]",
-            "//button[contains(@aria-label, 'Phone')]//div",
+            "//button[contains(@aria-label, 'Phone')]//div[contains(text(), '+') or contains(text(), '(')]",
             "//a[starts-with(@href, 'tel:')]",
-            "//div[contains(text(), '+') and contains(text(), ' ')]"
+            "//span[contains(text(), '+') and (contains(text(), '-') or contains(text(), ' '))]"
         ]
         
         for selector in phone_selectors:
@@ -278,7 +291,12 @@ def extract_restaurant_details(driver, url, task_id):
                 phone_elem = driver.find_element(By.XPATH, selector)
                 if phone_elem and phone_elem.text.strip():
                     phone_text = clean_text(phone_elem.text)
-                    if any(char.isdigit() for char in phone_text):
+                    # Strict phone validation
+                    if (phone_text and 
+                        (phone_text.startswith('+') or phone_text.startswith('(')) and
+                        any(char.isdigit() for char in phone_text) and
+                        len(phone_text) >= 8 and
+                        not phone_text.lower().startswith('0  26k')):  # Filter out the problematic pattern
                         details["Phone"] = phone_text
                         details["Has_Contact_Info"] = True
                         log_message(f"✓ Found phone: {details['Phone']}")
@@ -286,50 +304,85 @@ def extract_restaurant_details(driver, url, task_id):
             except:
                 continue
 
-        # Extract rating and reviews with fallbacks
+        # Extract rating with validation
         try:
-            rating_elem = driver.find_element(By.XPATH, "//div[contains(@class, 'F7nice')]//span[@aria-hidden='true']")
-            if rating_elem:
-                details["Rating"] = clean_text(rating_elem.text)
+            rating_elem = driver.find_element(By.XPATH, "//div[contains(@class, 'F7nice')]//span[@aria-hidden='true' and string-length(text()) <= 3]")
+            if rating_elem and rating_elem.text.strip():
+                rating_text = clean_text(rating_elem.text)
+                try:
+                    # Validate it's a number between 1-5
+                    rating_float = float(rating_text)
+                    if 1.0 <= rating_float <= 5.0:
+                        details["Rating"] = rating_text
+                except ValueError:
+                    pass
         except:
             try:
                 rating_elem = driver.find_element(By.XPATH, "//span[@class='MW4etd']")
-                if rating_elem:
-                    details["Rating"] = clean_text(rating_elem.text)
+                if rating_elem and rating_elem.text.strip():
+                    rating_text = clean_text(rating_elem.text)
+                    try:
+                        rating_float = float(rating_text)
+                        if 1.0 <= rating_float <= 5.0:
+                            details["Rating"] = rating_text
+                    except ValueError:
+                        pass
             except:
                 pass
 
+        # Extract reviews count with validation
         try:
-            reviews_elem = driver.find_element(By.XPATH, "//div[contains(@class, 'F7nice')]//span[contains(text(), '(') and contains(text(), ')')]")
-            if reviews_elem:
+            reviews_elem = driver.find_element(By.XPATH, "//div[contains(@class, 'F7nice')]//span[contains(text(), '(') and contains(text, ')') and contains(text(), 'review')]")
+            if not reviews_elem:
+                reviews_elem = driver.find_element(By.XPATH, "//span[contains(text(), '(') and contains(text(), ')') and (contains(text(), 'review') or text()[matches(., '\\([0-9,]+\\)')])]")
+            
+            if reviews_elem and reviews_elem.text.strip():
                 reviews_text = clean_text(reviews_elem.text)
                 details["Reviews"] = reviews_text
-                # Extract number from parentheses
+                
+                # Extract number from parentheses with validation
                 import re
-                numbers = re.findall(r'\(([\d,]+)\)', reviews_text)
+                numbers = re.findall(r'\(([0-9,]+)\)', reviews_text)
                 if numbers:
-                    count = int(numbers[0].replace(',', ''))
-                    details["Reviews_Count"] = count
-                    details["Has_Sufficient_Reviews"] = count >= 25
+                    try:
+                        count = int(numbers[0].replace(',', ''))
+                        if 0 <= count <= 1000000:  # Reasonable range
+                            details["Reviews_Count"] = count
+                            details["Has_Sufficient_Reviews"] = count >= 25
+                    except ValueError:
+                        pass
         except:
             pass
 
-        # Extract website
+        # Extract website with validation
         try:
             website_elem = driver.find_element(By.XPATH, "//a[@data-item-id='authority']//div[contains(@class, 'fontBodyMedium')]")
-            if website_elem:
-                details["Website"] = clean_text(website_elem.text)
+            if website_elem and website_elem.text.strip():
+                website_text = clean_text(website_elem.text)
+                if website_text and not website_text.startswith('google.'):
+                    details["Website"] = website_text
         except:
             try:
-                website_elem = driver.find_element(By.XPATH, "//a[contains(@href, 'http') and not(contains(@href, 'google.com'))]")
-                if website_elem:
-                    details["Website"] = website_elem.get_attribute("href")
+                website_link = driver.find_element(By.XPATH, "//a[contains(@href, 'http') and not(contains(@href, 'google.com')) and not(contains(@href, 'maps'))]")
+                if website_link:
+                    href = website_link.get_attribute("href")
+                    if href and not href.startswith('https://www.google.'):
+                        details["Website"] = href
             except:
                 pass
 
+        # Extract category/business type
+        try:
+            category_elem = driver.find_element(By.XPATH, "//button[contains(@class, 'DkEaL')]//span")
+            if category_elem and category_elem.text.strip():
+                category_text = clean_text(category_elem.text)
+                if category_text and len(category_text) < 50:
+                    details["Category"] = category_text
+        except:
+            pass
+
     except Exception as e:
         log_message(f"❌ Error extracting details: {e}")
-        # Don't return here, continue with whatever we got
     
     return details
 
@@ -506,7 +559,6 @@ def scrape_Maps_location(task_id, keyword, country, city):
         tasks[task_id]["running"] = False
         log_message(f"Task {task_id} completed with {len(tasks[task_id].get('results', []))} results")
 
-# Include the same scrape_Maps function with similar improvements...
 def scrape_Maps(task_id, location_data, keyword):
     """Scrape Google Maps for businesses across multiple locations with improved error handling"""
     driver = None
@@ -520,6 +572,7 @@ def scrape_Maps(task_id, location_data, keyword):
 
         results = []
         total_processed = 0
+        global_processed_urls = set()  # Global URL tracking to avoid duplicates
 
         for idx, (postal_code, city, country) in enumerate(location_data):
             if not tasks.get(task_id, {}).get("running", False):
@@ -540,20 +593,18 @@ def scrape_Maps(task_id, location_data, keyword):
                 for attempt in range(3):
                     try:
                         selectors_to_try = [
-                            "//div[@role='feed']",
-                            "//div[@aria-label='Results for']",
-                            "//div[contains(@class, 'Nv2PK')]",
-                            "//div[@data-result-index]"
+                            "//div[@role='feed']//a[contains(@href, '/maps/place/')]",
+                            "//div[@aria-label='Results for']//a[contains(@href, '/maps/place/')]",
+                            "//div[contains(@class, 'Nv2PK')]//a[contains(@href, '/maps/place/')]"
                         ]
                         
                         for selector in selectors_to_try:
                             try:
-                                WebDriverWait(driver, 10).until(
-                                    EC.presence_of_element_located((By.XPATH, selector))
-                                )
-                                results_loaded = True
-                                log_message(f"✓ Found results with selector: {selector}")
-                                break
+                                elements = driver.find_elements(By.XPATH, selector)
+                                if len(elements) > 0:
+                                    results_loaded = True
+                                    log_message(f"✓ Found {len(elements)} results with selector: {selector}")
+                                    break
                             except:
                                 continue
                         
@@ -571,34 +622,18 @@ def scrape_Maps(task_id, location_data, keyword):
                     continue
 
                 # Process results for this location
-                processed_urls = set()
                 location_results = 0
                 
-                # Scroll and collect results (limit scrolling for CSV processing)
-                for scroll_attempt in range(5):  # Reduced scrolling for CSV processing
+                # Get fresh result items for each postal code
+                for scroll_attempt in range(3):  # Reduced scrolling for efficiency
                     if not tasks.get(task_id, {}).get("running", False):
                         break
-                        
-                    # Find all clickable result items
-                    result_items = []
                     
-                    item_selectors = [
-                        "//div[@role='feed']//a[contains(@href, '/maps/place/')]",
-                        "//div[contains(@class, 'Nv2PK')]//a[contains(@href, '/maps/place/')]",
-                        "//a[contains(@href, '/maps/place/')]"
-                    ]
-                    
-                    for selector in item_selectors:
-                        try:
-                            items = driver.find_elements(By.XPATH, selector)
-                            if items:
-                                result_items = items
-                                break
-                        except:
-                            continue
+                    # Find clickable result items
+                    result_items = driver.find_elements(By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]")
                     
                     if not result_items:
-                        log_message("No result items found, trying to scroll more...")
+                        log_message("No result items found, scrolling...")
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                         time.sleep(3)
                         continue
@@ -606,28 +641,37 @@ def scrape_Maps(task_id, location_data, keyword):
                     log_message(f"Found {len(result_items)} potential results for {postal_code}")
                     
                     # Process each result (limit to prevent timeout)
-                    for item in result_items[:3]:  # Process max 3 per scroll for CSV
+                    items_to_process = result_items[:5]  # Process max 5 per scroll
+                    
+                    for item_index, item in enumerate(items_to_process):
                         if not tasks.get(task_id, {}).get("running", False):
                             break
                             
                         try:
                             url = item.get_attribute("href")
-                            if not url or url in processed_urls:
+                            if not url or url in global_processed_urls:
+                                log_message(f"Skipping duplicate or invalid URL: {url}")
                                 continue
                             
-                            processed_urls.add(url)
+                            # Add to global processed URLs
+                            global_processed_urls.add(url)
                             
-                            # Click and extract details
-                            driver.execute_script("arguments[0].scrollIntoView(true);", item)
-                            time.sleep(2)
+                            # Scroll item into view and click
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
+                            time.sleep(1)
                             
-                            item.click()
-                            smart_sleep(3, 5, "for business page to load")
+                            # Use JavaScript click to avoid interception
+                            driver.execute_script("arguments[0].click();", item)
+                            smart_sleep(5, 8, "for business page to load")
                             
-                            # Extract details using the same function as scrape_Maps_location
+                            # Extract details
                             details = extract_restaurant_details(driver, url, task_id)
                             
-                            if details["Name"] != "N/A":
+                            # Validate the extracted data
+                            if (details["Name"] != "N/A" and 
+                                details["Name"].lower() not in ['results', 'map data', 'google'] and
+                                len(details["Name"]) > 2):
+                                
                                 business_data = {
                                     "Postal Code": postal_code,
                                     "Name": details["Name"],
@@ -658,10 +702,17 @@ def scrape_Maps(task_id, location_data, keyword):
                                 tasks[task_id]["progress"] = total_processed
                                 
                                 log_message(f"✅ Processed: {details['Name']} from {postal_code} (Total: {total_processed})")
+                            else:
+                                log_message(f"❌ Invalid business data, skipping: {details['Name']}")
                             
                             # Go back to results
                             driver.back()
                             smart_sleep(2, 3, "after going back")
+                            
+                            # Re-wait for results after going back
+                            WebDriverWait(driver, 10).until(
+                                EC.presence_of_element_located((By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]"))
+                            )
                             
                         except Exception as e:
                             log_message(f"❌ Error processing result from {postal_code}: {e}")
@@ -672,22 +723,21 @@ def scrape_Maps(task_id, location_data, keyword):
                                 pass
                             continue
                     
+                    # Break if we've found enough results for this location
+                    if location_results >= 3:  # Limit per location
+                        break
+                    
                     # Scroll for more results
                     try:
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                         time.sleep(3)
                     except:
                         break
-                    
-                    # Break if we've found enough results for this location
-                    if location_results >= 5:  # Limit per location to manage time
-                        break
                 
                 log_message(f"📍 Completed {postal_code}: Found {location_results} businesses")
 
             except Exception as e:
                 log_message(f"❌ Error processing location {postal_code}: {e}")
-                log_message(f"❌ Traceback: {traceback.format_exc()}")
                 continue
 
         log_message(f"🎉 CSV Scraping completed! Total businesses found: {len(results)}")
