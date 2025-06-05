@@ -1,6 +1,7 @@
 uvicorn
 fastapi
 selenium
+selenium-stealth
 pandas
 webdriver-manager
 python-multipart
