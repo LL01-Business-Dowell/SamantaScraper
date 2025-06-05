@@ -96,6 +96,10 @@ def init_driver():
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-web-security")
     options.add_argument("--disable-features=VizDisplayCompositor")
+    # Add these Chrome options to the init_driver() function
+    options.add_argument("--no-first-run")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--remote-debugging-port=9222")
     
     # Enhanced user agent rotation
     user_agents = [
@@ -531,30 +535,182 @@ def scrape_Maps(task_id, location_data, keyword):
                 driver.get(maps_url)
                 smart_sleep(8, 12, "for search results to load")
 
-                results_container = safe_find_element(driver, By.XPATH, "//div[@role='feed']", 15)
-                if not results_container:
-                    log_message(f"⚠️ Couldn't find results container for {postal_code}")
+                # Wait for results with multiple attempts
+                results_loaded = False
+                for attempt in range(3):
+                    try:
+                        selectors_to_try = [
+                            "//div[@role='feed']",
+                            "//div[@aria-label='Results for']",
+                            "//div[contains(@class, 'Nv2PK')]",
+                            "//div[@data-result-index]"
+                        ]
+                        
+                        for selector in selectors_to_try:
+                            try:
+                                WebDriverWait(driver, 10).until(
+                                    EC.presence_of_element_located((By.XPATH, selector))
+                                )
+                                results_loaded = True
+                                log_message(f"✓ Found results with selector: {selector}")
+                                break
+                            except:
+                                continue
+                        
+                        if results_loaded:
+                            break
+                            
+                        log_message(f"Attempt {attempt + 1}/3 failed, retrying...")
+                        time.sleep(3)
+                        
+                    except Exception as e:
+                        log_message(f"Attempt {attempt + 1} error: {e}")
+
+                if not results_loaded:
+                    log_message(f"❌ Could not find any results for {postal_code}")
                     continue
 
-                # Process results for this location (similar logic to scrape_Maps_location)
-                # ... (implement similar processing logic)
+                # Process results for this location
+                processed_urls = set()
+                location_results = 0
+                
+                # Scroll and collect results (limit scrolling for CSV processing)
+                for scroll_attempt in range(5):  # Reduced scrolling for CSV processing
+                    if not tasks.get(task_id, {}).get("running", False):
+                        break
+                        
+                    # Find all clickable result items
+                    result_items = []
+                    
+                    item_selectors = [
+                        "//div[@role='feed']//a[contains(@href, '/maps/place/')]",
+                        "//div[contains(@class, 'Nv2PK')]//a[contains(@href, '/maps/place/')]",
+                        "//a[contains(@href, '/maps/place/')]"
+                    ]
+                    
+                    for selector in item_selectors:
+                        try:
+                            items = driver.find_elements(By.XPATH, selector)
+                            if items:
+                                result_items = items
+                                break
+                        except:
+                            continue
+                    
+                    if not result_items:
+                        log_message("No result items found, trying to scroll more...")
+                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(3)
+                        continue
+                    
+                    log_message(f"Found {len(result_items)} potential results for {postal_code}")
+                    
+                    # Process each result (limit to prevent timeout)
+                    for item in result_items[:3]:  # Process max 3 per scroll for CSV
+                        if not tasks.get(task_id, {}).get("running", False):
+                            break
+                            
+                        try:
+                            url = item.get_attribute("href")
+                            if not url or url in processed_urls:
+                                continue
+                            
+                            processed_urls.add(url)
+                            
+                            # Click and extract details
+                            driver.execute_script("arguments[0].scrollIntoView(true);", item)
+                            time.sleep(2)
+                            
+                            item.click()
+                            smart_sleep(3, 5, "for business page to load")
+                            
+                            # Extract details using the same function as scrape_Maps_location
+                            details = extract_restaurant_details(driver, url, task_id)
+                            
+                            if details["Name"] != "N/A":
+                                business_data = {
+                                    "Postal Code": postal_code,
+                                    "Name": details["Name"],
+                                    "Address": details["Address"],
+                                    "Phone": details["Phone"],
+                                    "Website": details["Website"],
+                                    "URL": url,
+                                    "City": city,
+                                    "Country": country,
+                                    "Rating": details["Rating"],
+                                    "Reviews": details["Reviews"],
+                                    "Reviews_Count": details["Reviews_Count"],
+                                    "Plus Code": details["Plus Code"],
+                                    "Category": details["Category"],
+                                    "Hours": details["Hours"],
+                                    "Has_Multiple_Locations": details["Has_Multiple_Locations"],
+                                    "Has_Contact_Info": details["Has_Contact_Info"],
+                                    "Has_Sufficient_Reviews": details["Has_Sufficient_Reviews"],
+                                    "Has_Working_Hours": details["Has_Working_Hours"],
+                                }
+                                
+                                results.append(business_data)
+                                location_results += 1
+                                total_processed += 1
+                                
+                                # Update task progress
+                                tasks[task_id]["results"] = results
+                                tasks[task_id]["progress"] = total_processed
+                                
+                                log_message(f"✅ Processed: {details['Name']} from {postal_code} (Total: {total_processed})")
+                            
+                            # Go back to results
+                            driver.back()
+                            smart_sleep(2, 3, "after going back")
+                            
+                        except Exception as e:
+                            log_message(f"❌ Error processing result from {postal_code}: {e}")
+                            try:
+                                driver.back()
+                                time.sleep(2)
+                            except:
+                                pass
+                            continue
+                    
+                    # Scroll for more results
+                    try:
+                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(3)
+                    except:
+                        break
+                    
+                    # Break if we've found enough results for this location
+                    if location_results >= 5:  # Limit per location to manage time
+                        break
+                
+                log_message(f"📍 Completed {postal_code}: Found {location_results} businesses")
 
             except Exception as e:
                 log_message(f"❌ Error processing location {postal_code}: {e}")
+                log_message(f"❌ Traceback: {traceback.format_exc()}")
                 continue
+
+        log_message(f"🎉 CSV Scraping completed! Total businesses found: {len(results)}")
+        
+        # Final update
+        tasks[task_id]["results"] = results
+        tasks[task_id]["progress"] = len(results)
 
     except Exception as e:
         log_message(f"❌ Critical error in scraping function: {e}")
+        log_message(f"❌ Traceback: {traceback.format_exc()}")
         tasks[task_id]["error"] = str(e)
     finally:
         if driver:
             try:
                 driver.quit()
-            except:
-                pass
-        tasks[task_id]["running"] = False
-
-# REST OF THE API ENDPOINTS REMAIN THE SAME...
+                log_message("✓ Driver closed successfully")
+            except Exception as e:
+                log_message(f"⚠️ Error closing driver: {e}")
+        
+        if task_id in tasks:
+            tasks[task_id]["running"] = False
+            log_message(f"Task {task_id} completed with {len(tasks[task_id].get('results', []))} results")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
@@ -602,7 +758,7 @@ async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Fo
         country = str(row.iloc[2]) if not pd.isna(row.iloc[2]) else ""
         location_data.append([postal_code, city, country])
 
-    tasks[task_id] = {"running": True, "progress": 0, "results": [], "error": None}
+    tasks[task_id] = {"running": True, "progress": 0, "results": [], "error": None, "postal_code": postal_code, "city": city, "country": country}
     threading.Thread(target=scrape_Maps, args=(task_id, location_data, keyword)).start()
 
     return {"message": "Processing started", "task_id": task_id}
