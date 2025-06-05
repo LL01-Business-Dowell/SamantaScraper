@@ -44,7 +44,7 @@ def log_message(message):
     print(log_entry)
     logger.info(log_entry)
 
-def smart_sleep(min_sec=10, max_sec=15, reason=""):
+def smart_sleep(min_sec=5, max_sec=8, reason=""):  # REDUCED default sleep times
     delay = random.uniform(min_sec, max_sec)
     log_message(f"⏳ Sleeping for {delay:.2f}s {reason}")
     time.sleep(delay)
@@ -96,16 +96,25 @@ def init_driver():
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-web-security")
     options.add_argument("--disable-features=VizDisplayCompositor")
-    # Add these Chrome options to the init_driver() function
     options.add_argument("--no-first-run")
     options.add_argument("--disable-default-apps")
     options.add_argument("--remote-debugging-port=9222")
+    
+    # ADDITIONAL PERFORMANCE OPTIMIZATIONS
+    options.add_argument("--disable-images")  # Disable image loading for faster performance
+    options.add_argument("--disable-javascript")  # Only enable if it doesn't break functionality
+    options.add_argument("--disable-plugins")
+    options.add_argument("--disable-java")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-renderer-backgrounding")
     
     # Enhanced user agent rotation
     user_agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ]
     options.add_argument(f"--user-agent={random.choice(user_agents)}")
     
@@ -114,9 +123,10 @@ def init_driver():
     options.add_argument("--disable-logging")
     options.add_argument("--log-level=3")
     
-    # Add memory and performance optimizations
+    # Enhanced memory and performance optimizations
     options.add_argument("--memory-pressure-off")
-    options.add_argument("--max_old_space_size=4096")
+    options.add_argument("--max_old_space_size=8192")  # INCREASED memory
+    options.add_argument("--aggressive-cache-discard")
 
     log_message("🌐 Setting up Chrome driver...")
 
@@ -133,9 +143,9 @@ def init_driver():
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
             Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+            Object.defineProperty(navigator, 'permissions', {get: () => ({query: () => Promise.resolve({state: 'granted'})})});
         """)
         
-        # ADD STEALTH MODE HERE - AFTER DRIVER CREATION
         try:
             from selenium_stealth import stealth
             stealth(driver,
@@ -149,12 +159,6 @@ def init_driver():
             log_message("✓ Stealth mode applied successfully")
         except ImportError:
             log_message("⚠️ selenium-stealth not installed, using basic anti-detection")
-            # Fallback anti-detection
-            driver.execute_script("""
-                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-            """)
         
         log_message("✓ Chrome driver created successfully with WebDriver Manager")
         return driver
@@ -164,15 +168,13 @@ def init_driver():
 
         try:
             driver = webdriver.Chrome(options=options)
-
-            # Enhanced anti-detection
+            # Same enhanced anti-detection code here
             driver.execute_script("""
                 Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
                 Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
                 Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
             """)
             
-            # ADD STEALTH MODE HERE TOO - FOR FALLBACK DRIVER
             try:
                 from selenium_stealth import stealth
                 stealth(driver,
@@ -186,11 +188,6 @@ def init_driver():
                 log_message("✓ Stealth mode applied successfully")
             except ImportError:
                 log_message("⚠️ selenium-stealth not installed, using basic anti-detection")
-                driver.execute_script("""
-                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                """)
             
             log_message("✓ Chrome driver created successfully")
             return driver
@@ -408,9 +405,8 @@ def scrape_Maps_location(task_id, keyword, country, city):
 
         # Wait for results with multiple attempts
         results_loaded = False
-        for attempt in range(5):  # Increased attempts
+        for attempt in range(5):
             try:
-                # Try multiple selectors for results
                 selectors_to_try = [
                     "//div[@role='feed']",
                     "//div[@aria-label='Results for']",
@@ -448,8 +444,8 @@ def scrape_Maps_location(task_id, keyword, country, city):
         results = []
         processed_urls = set()
         
-        # Scroll and collect results
-        for scroll_attempt in range(10):  # Reduced from 25 to 10
+        # INCREASED SCROLLING - Scroll and collect results
+        for scroll_attempt in range(50):  # INCREASED from 10 to 50
             if not tasks.get(task_id, {}).get("running", False):
                 break
                 
@@ -480,8 +476,8 @@ def scrape_Maps_location(task_id, keyword, country, city):
             
             log_message(f"Found {len(result_items)} potential results")
             
-            # Process each result
-            for item in result_items[:5]:  # Limit to 5 per scroll to avoid timeouts
+            # INCREASED PROCESSING - Process each result
+            for item in result_items[:15]:  # INCREASED from 5 to 15 per scroll
                 if not tasks.get(task_id, {}).get("running", False):
                     break
                     
@@ -537,11 +533,32 @@ def scrape_Maps_location(task_id, keyword, country, city):
                     log_message(f"❌ Error processing result: {e}")
                     continue
             
-            # Scroll for more results
+            # Enhanced scrolling strategy
             try:
+                # Multiple scroll techniques
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(3)
-            except:
+                time.sleep(2)
+                
+                # Try scrolling the results panel specifically
+                feed_element = driver.find_element(By.XPATH, "//div[@role='feed']")
+                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed_element)
+                time.sleep(2)
+                
+                # Check if we've reached the end
+                current_height = driver.execute_script("return document.body.scrollHeight")
+                if scroll_attempt > 0:
+                    if hasattr(scrape_Maps_location, 'last_height') and current_height == scrape_Maps_location.last_height:
+                        no_new_content_count = getattr(scrape_Maps_location, 'no_new_content_count', 0) + 1
+                        scrape_Maps_location.no_new_content_count = no_new_content_count
+                        if no_new_content_count >= 5:  # Stop if no new content for 5 scrolls
+                            log_message("No new content found, stopping scroll")
+                            break
+                    else:
+                        scrape_Maps_location.no_new_content_count = 0
+                scrape_Maps_location.last_height = current_height
+                
+            except Exception as e:
+                log_message(f"Error during scrolling: {e}")
                 break
         
         log_message(f"🎉 Scraping completed! Found {len(results)} businesses")
@@ -572,7 +589,7 @@ def scrape_Maps(task_id, location_data, keyword):
 
         results = []
         total_processed = 0
-        global_processed_urls = set()  # Global URL tracking to avoid duplicates
+        global_processed_urls = set()
 
         for idx, (postal_code, city, country) in enumerate(location_data):
             if not tasks.get(task_id, {}).get("running", False):
@@ -624,8 +641,8 @@ def scrape_Maps(task_id, location_data, keyword):
                 # Process results for this location
                 location_results = 0
                 
-                # Get fresh result items for each postal code
-                for scroll_attempt in range(3):  # Reduced scrolling for efficiency
+                # INCREASED SCROLLING for CSV processing
+                for scroll_attempt in range(15):  # INCREASED from 3 to 15
                     if not tasks.get(task_id, {}).get("running", False):
                         break
                     
@@ -640,8 +657,8 @@ def scrape_Maps(task_id, location_data, keyword):
                     
                     log_message(f"Found {len(result_items)} potential results for {postal_code}")
                     
-                    # Process each result (limit to prevent timeout)
-                    items_to_process = result_items[:5]  # Process max 5 per scroll
+                    # INCREASED PROCESSING - Process each result
+                    items_to_process = result_items[:10]  # INCREASED from 5 to 10 per scroll
                     
                     for item_index, item in enumerate(items_to_process):
                         if not tasks.get(task_id, {}).get("running", False):
@@ -653,21 +670,16 @@ def scrape_Maps(task_id, location_data, keyword):
                                 log_message(f"Skipping duplicate or invalid URL: {url}")
                                 continue
                             
-                            # Add to global processed URLs
                             global_processed_urls.add(url)
                             
-                            # Scroll item into view and click
                             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
                             time.sleep(1)
                             
-                            # Use JavaScript click to avoid interception
                             driver.execute_script("arguments[0].click();", item)
                             smart_sleep(5, 8, "for business page to load")
                             
-                            # Extract details
                             details = extract_restaurant_details(driver, url, task_id)
                             
-                            # Validate the extracted data
                             if (details["Name"] != "N/A" and 
                                 details["Name"].lower() not in ['results', 'map data', 'google'] and
                                 len(details["Name"]) > 2):
@@ -697,7 +709,6 @@ def scrape_Maps(task_id, location_data, keyword):
                                 location_results += 1
                                 total_processed += 1
                                 
-                                # Update task progress
                                 tasks[task_id]["results"] = results
                                 tasks[task_id]["progress"] = total_processed
                                 
@@ -705,11 +716,9 @@ def scrape_Maps(task_id, location_data, keyword):
                             else:
                                 log_message(f"❌ Invalid business data, skipping: {details['Name']}")
                             
-                            # Go back to results
                             driver.back()
                             smart_sleep(2, 3, "after going back")
                             
-                            # Re-wait for results after going back
                             WebDriverWait(driver, 10).until(
                                 EC.presence_of_element_located((By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]"))
                             )
@@ -723,14 +732,20 @@ def scrape_Maps(task_id, location_data, keyword):
                                 pass
                             continue
                     
+                    # REMOVED LIMIT - Allow unlimited results per location
                     # Break if we've found enough results for this location
-                    if location_results >= 3:  # Limit per location
-                        break
+                    # if location_results >= 3:  # REMOVED THIS LIMIT
+                    #     break
                     
-                    # Scroll for more results
+                    # Enhanced scrolling
                     try:
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(3)
+                        time.sleep(2)
+                        
+                        # Try scrolling the results panel
+                        feed_element = driver.find_element(By.XPATH, "//div[@role='feed']")
+                        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed_element)
+                        time.sleep(2)
                     except:
                         break
                 
@@ -742,7 +757,6 @@ def scrape_Maps(task_id, location_data, keyword):
 
         log_message(f"🎉 CSV Scraping completed! Total businesses found: {len(results)}")
         
-        # Final update
         tasks[task_id]["results"] = results
         tasks[task_id]["progress"] = len(results)
 
