@@ -173,7 +173,7 @@ def bin_search(sorted_lats,top_left, top_right, bottom_left, bottom_right, lat_m
     right_idx = bisect.bisect_right(sorted_lats, lat_max)
     print(f"right idx (lat_max))= {right_idx}")
 
-    target_lats = sorted_lats[left_idx:right_idx]
+    target_lats = sorted_lats[left_idx:right_idx+1]
     # print(f"target_lats= {target_lats}")
     return target_lats
 def get_index( mongo_uri='mongodb://localhost:27017/'):
