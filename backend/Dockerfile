@@ -8,7 +8,7 @@ RUN apt-get update --fix-missing && \
     apt-get install -y --no-install-recommends -f \
     wget curl unzip gnupg \
     libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
-    libxkbcommon0 libxrandr2 xdg-utils libglib2.0-0 libnss3 libgconf-2-4 \
+    libxkbcommon0 libxrandr2 xdg-utils libglib2.0-0 libnss3 \
     libx11-xcb1 libxcursor1 libxi6 libxrender1 libdbus-glib-1-2 libgtk-3-0 && \
     rm -rf /var/lib/apt/lists/*
 
