@@ -4,11 +4,15 @@ from pymongo import MongoClient, GEOSPHERE
 import bisect
 import requests
 import json
-datacube_url = "https://datacube.uxlivinglab.online"
+from decouple import config
+
+datacube_url = config("BASE_DATACUBE_URL")
+database_id = config("DATABASE_ID")
+
 crud_url=datacube_url+"/api/crud/"
 create_url=datacube_url+"/api/create_database/"
 add_colls_url = datacube_url+"/api/add_collection/"
-api_key="sk_test_9CVArJ9PJ1FWC99nJ6esHVG8EY3D0_LDoLTn2D-_xAQ"
+api_key=config("API_KEY")
 
 headers = {
         "Authorization": f"Api-Key {api_key}",
@@ -517,11 +521,11 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
 database_detail =  {"success":True,"database":{"id":"68b16e0f77a6f0d3e0dd3770","name":"inscribinglocationsraw"},
                     "collections":[{"name":"latitude_index","created":True,"exists":False,"error":None}]}
 culprit_filename="scaled_coordinates_200_200_0_0.xlsx"
-culprit_database_id="68b16e0f77a6f0d3e0dd3770"
+culprit_database_id= config("DATABASE_ID")
+
 # create_database_datacube(culprit_filename)
 # add_collections(culprit_filename,culprit_database_id)
 insert_data_datacube(culprit_filename,culprit_database_id)
-# colls = requests.get("https://datacube.uxlivinglab.online/api/list_collections/?database_id=688a2f207aa9fc1283436d3c")
 # print(f"Length == {type(colls)}")
 # print(f"Length == {colls.keys()}")
 # print(f"Length == {len(colls.json()['collections'])}")
