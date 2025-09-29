@@ -26,8 +26,8 @@ RUN set -eux; \
     echo "ChromeDriver LATEST_RELEASE Version: ${CHROME_DRIVER_VERSION}"; \
     wget -O /tmp/chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/133.0.6943.53/linux64/chromedriver-linux64.zip"; \
     if [ ! -s /tmp/chromedriver.zip ]; then \
-        echo "ERROR: ChromeDriver zip file download failed or resulted in empty file!"; \
-        exit 1; \
+    echo "ERROR: ChromeDriver zip file download failed or resulted in empty file!"; \
+    exit 1; \
     fi; \
     unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
     mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \

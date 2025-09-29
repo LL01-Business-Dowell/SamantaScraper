@@ -1,2 +1,37 @@
 env
 a.py
+# Django-specific files
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+
+# Virtual Environment
+.env
+venv/
+env/
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.bak
+*~
+
+# Static and Media files
+/static/
+/media/
+
+# Test and Coverage files
+.coverage
+.tox/
+
+# Compiled files
+*.mo
+*.po
+
+# Other general ignored files
+.DS_Store
+Thumbs.db
