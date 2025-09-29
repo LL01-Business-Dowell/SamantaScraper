@@ -518,7 +518,7 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     return {
         'raw_coordinates': raw_results,
     }
-database_detail =  {"success":True,"database":{"id":"68b16e0f77a6f0d3e0dd3770","name":"inscribinglocationsraw"},
+database_detail =  {"success":True,"database":{"id":config("DATABASE_ID"),"name":"inscribinglocationsraw"},
                     "collections":[{"name":"latitude_index","created":True,"exists":False,"error":None}]}
 culprit_filename="scaled_coordinates_200_200_0_0.xlsx"
 culprit_database_id= config("DATABASE_ID")
