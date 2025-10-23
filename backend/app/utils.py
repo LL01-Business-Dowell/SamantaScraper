@@ -47,3 +47,25 @@ def format_results_for_csv(results: List[Dict[str, Any]]) -> List[Dict[str, str]
         formatted_results.append(formatted_result)
     
     return formatted_results
+
+def calculate_boundary_points(d):
+
+    # d: distance specified by the user in KM
+
+    lat = 0.000000000000000  
+    lon = 0.000000000000000
+    t = 0.00899321605918700 
+
+    top_left = tuple((lat + d*t, lon - d*t))
+    top_right = tuple((lat + d*t, lon + d*t))
+    bottom_left = tuple((lat - d*t, lon - d*t))
+    bottom_right = tuple((lat - d*t, lon + d*t))
+
+    print(f"Top Left: {top_left}, Top Right: {top_right}, Bottom Left: {bottom_left}, Bottom Right: {bottom_right}")
+
+    top_mid = tuple((lat + d*t, lon))
+    bottom_mid = tuple((lat - d*t, lon))
+    left_mid = tuple((lat, lon - d*t))
+    right_mid = tuple((lat, lon + d*t))
+
+    return top_left, top_right, bottom_left, bottom_right
