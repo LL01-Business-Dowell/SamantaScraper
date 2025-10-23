@@ -20,4 +20,4 @@ EXPOSE 8001
 
 # Command to run the Django development server
 # IMPORTANT: It must run on 0.0.0.0 and on the EXPOSEd port
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8001"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8002"]
