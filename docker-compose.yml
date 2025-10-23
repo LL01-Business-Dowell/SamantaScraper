@@ -19,7 +19,7 @@ services:
     build: ./inscribing_proj
     container_name: inscriber_container
     ports:
-      - "8001:8001"
+      - "8002:8002"
     
     restart: always
     volumes:
