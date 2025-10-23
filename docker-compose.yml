@@ -20,6 +20,8 @@ services:
     container_name: inscriber_container
     ports:
       - "8002:8002"
+    env_file:
+      - dev.env
     
     restart: always
     volumes:
