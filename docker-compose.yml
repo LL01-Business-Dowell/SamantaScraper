@@ -46,24 +46,25 @@ services:
     networks:
       - queue-net
 
-  nginx:
+    nginx:
     build:
       context: ./nginx
       dockerfile: Dockerfile
     container_name: nginx
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /etc/letsencrypt/live/map.uxlivinglab.online/fullchain.pem:/etc/letsencrypt/live/map.uxlivinglab.online/fullchain.pem:ro
-      - /etc/letsencrypt/live/map.uxlivinglab.online/privkey.pem:/etc/letsencrypt/live/map.uxlivinglab.online/privkey.pem:ro
+      - /etc/ssl/map.uxlivinglab.online/map_uxlivinglab_online.crt:/etc/ssl/map.uxlivinglab.online/map_uxlivinglab_online.crt:ro
+      - /etc/ssl/map.uxlivinglab.online/map.uxlivinglab.online.key:/etc/ssl/map.uxlivinglab.online/map.uxlivinglab.online.key:ro
     restart: always
     networks:
       - queue-net
     depends_on:
       - backend
       - frontend
+
 
 
 networks:
