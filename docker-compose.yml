@@ -56,12 +56,14 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/ssl/map.uxlivinglab.online/map_uxlivinglab_online.crt:/etc/ssl/map.uxlivinglab.online/map_uxlivinglab_online.crt:ro
       - /etc/ssl/map.uxlivinglab.online/map.uxlivinglab.online.key:/etc/ssl/map.uxlivinglab.online/map.uxlivinglab.online.key:ro
+      - ./frontend:/home/SamantaScraper/frontend:ro   # 👈 Add this line
     restart: always
     depends_on:
       - backend
       - frontend
     networks:
       - queue-net
+
 
 networks:
   queue-net:
