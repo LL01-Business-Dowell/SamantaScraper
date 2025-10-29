@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    container_name: backend_container_scraper
+    container_name: backend_container
     ports:
       - "8000:8000"
     restart: always
@@ -39,7 +39,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: frontend_container_scraper
+    container_name: frontend_container
     ports:
       - "5173:5173"
     volumes:
