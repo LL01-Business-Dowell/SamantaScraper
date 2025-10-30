@@ -18,8 +18,8 @@ services:
   inscriber:
     build: ./inscribing_proj
     container_name: inscriber_container
-    expose:
-      - "8002"
+    ports:
+      - "8002:8002"
     env_file:
       - ./inscribing_proj/dev.env
     restart: always
