@@ -32,7 +32,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "map.uxlivinglab.online"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://map.uxlivinglab.online",
+        "https://82.29.161.195"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,7 +109,7 @@ def init_driver():
     
     # ADDITIONAL PERFORMANCE OPTIMIZATIONS
     options.add_argument("--disable-images")  # Disable image loading for faster performance
-    options.add_argument("--disable-javascript")  # Only enable if it doesn't break functionality
+    # Keep JavaScript enabled to ensure Maps UI loads fully
     options.add_argument("--disable-plugins")
     options.add_argument("--disable-java")
     options.add_argument("--disable-background-timer-throttling")
@@ -908,8 +912,17 @@ def scrape_by_coordinates(task_id, keyword, target_coords):
                 if not loaded:
                     continue
 
+                # Aggressively scroll the results feed to load more items
+                try:
+                    feed = driver.find_element(By.XPATH, "//div[@role='feed']")
+                    for _ in range(6):  # increase as needed
+                        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight;", feed)
+                        time.sleep(1.2)
+                except Exception:
+                    pass
+
                 items = driver.find_elements(By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]")
-                for item in items[:10]:
+                for item in items[:30]:  # process more items per coordinate
                     if not tasks.get(task_id, {}).get("running", False):
                         break
                     try:
