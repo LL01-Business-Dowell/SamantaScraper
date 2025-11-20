@@ -1,244 +1,151 @@
-import re
-from openpyxl import load_workbook
-from pymongo import MongoClient, GEOSPHERE
-import bisect
-import requests
 import json
+import requests
 from decouple import config
 
-database_id = config("DATABASE_ID")
-datacube_api_url = config("BASE_DATACUBE_URL")
-crud_url = datacube_api_url+"api/crud"
-api_key=config("API_KEY")
 
-headers = {
-        "Authorization": f"Api-Key {api_key}",
-        "Content-Type": "application/json"
-    }
-### DATACUBE QUERIES ###
-def get_data_datacube(collection_name=config("INDEX_COLLECTION_NAME"),filters={}):
-    length =len( list(filters.keys()))
-    if length:
-        filters = json.dumps(filters)
-    params =params = {
-    "database_id": database_id,
-    "collection_name": collection_name,
-    "filters": filters,
-    "page":1,
-    "page_size":202
+# ============================================================
+# ENVIRONMENT VARIABLES (loaded correctly for Docker)
+# ============================================================
+
+DATABASE_ID = config("DATABASE_ID")
+DATABASE_NAME = config("DATABASE_NAME")
+INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
+
+API_KEY = config("API_KEY")
+BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
+
+CRUD_COORDS_PATH = config("CRUD_COORDS_PATH")       # e.g. /api/crud
+CRUD_RESULTS_PATH = config("CRUD_RESULTS_PATH")     # currently same as coords path
+
+CRUD_URL = f"{BASE_DATACUBE_URL.rstrip('/')}{CRUD_COORDS_PATH}"
+
+
+HEADERS = {
+    "Authorization": f"Api-Key {API_KEY}",
+    "Content-Type": "application/json"
 }
 
-    print(f"Get data datacube filters = {filters} length of filters = {length} collection_name {collection_name}")
-    
-    try:
-        res = requests.get(url=crud_url,params=params, headers=headers).json()
 
-        if res['success']:
-            return res
-        else:
-            raise Exception
-    except Exception as e:
-        print(f"Exceptions is {e}")
-        return res
-        
-def sort_data_cube(res):
-    print("Sorting lats")
-    sorted_lats = sorted([doc['latitude'] for doc in res['data']])
-    return sorted_lats
-def get_data_from_db_datacube(target_lats ,lat_max,lat_min,lon_max,lon_min, raw_data):
+# ============================================================
+# Query Datacube (Generic)
+# ============================================================
 
-    collections = [doc['collection'] for doc in raw_data['data'] if doc['latitude'] in target_lats]
-    # Query databases
-    raw_results = []
-    geo_results = []
-    for coll_name in collections:
-        # Raw database query
-        raw_docs = get_data_datacube(collection_name=coll_name,filters={
-            'longitude': {'$gte': lon_min, '$lte': lon_max}
-        })
-        for doc in raw_docs['data']:
-            doc.pop('_id', None)
-        raw_results.append(raw_docs['data'])
-    results ={
-        'raw_coordinates': raw_results
+def get_data_datacube(collection_name=None, filters=None, page_size=200):
+    """
+    Fetch documents from Datacube using filters.
+    Always JSON-encode filters and NEVER use mutable defaults.
+    """
+    if collection_name is None:
+        collection_name = INDEX_COLLECTION_NAME
+
+    if filters is None:
+        filters = {}
+
+    params = {
+        "database_id": DATABASE_ID,
+        "collection_name": collection_name,
+        "filters": json.dumps(filters),    # VALID Datacube format
+        "page": 1,
+        "page_size": page_size,
     }
-    return results
+
+    try:
+        response = requests.get(CRUD_URL, params=params, headers = HEADERS)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Datacube request failed: {e}")
+
+
+# ============================================================
+# Get Index Collections (List of latitude_XXXXX)
+# ============================================================
+
+def get_latitude_collections():
+    """
+    Calls the Datacube index collection to fetch all latitude sub-collections.
+    Sorted so that binary search works correctly.
+    """
+    try:
+        result = get_data_datacube(collection_name=INDEX_COLLECTION_NAME)
+        collections = result.get("result", {}).get("collections", [])
+        collections.sort()  # ensure ordered scan
+        return collections
+    except Exception as e:
+        raise Exception(f"Failed to fetch latitude index: {e}")
+
+
+# ============================================================
+# Binary Search
+# ============================================================
+
+def binary_search(arr, value):
+    """Finds index in sorted array using binary search."""
+    low, high = 0, len(arr) - 1
+
+    while low <= high:
+        mid = (low + high) // 2
+        mid_val = arr[mid]
+
+        if mid_val == value:
+            return mid
+        elif mid_val < value:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return high  # returns nearest lower index
+
+
+# ============================================================
+# Geo Query Using Datacube (Main Entry Function)
+# ============================================================
+
 def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_right):
     """
-    Query coordinates within bounding box defined by four (lat, lon) points.
-    Uses binary search on sorted latitude index for efficiency.
+    Your main function used by the Django API.
+    Finds all documents inside a bounding box using Datacube.
     """
-    points = [top_left, top_right, bottom_left, bottom_right]
-    # Calculate bounding box
-    lats = [float(p[0] )for p in points]
-    lons = [float(p[1]) for p in points]
-    lat_min, lat_max = min(lats), max(lats)
-    lon_min, lon_max = min(lons), max(lons)
-    raw_data = get_data_datacube()
-    try:
-        if raw_data["success"]:
-            sorted_lats = sort_data_cube(raw_data)
-            target_lats = bin_search(sorted_lats, top_left,top_right,bottom_left,
-                                     bottom_right,lat_max,lat_min)
-            results = get_data_from_db_datacube(target_lats,lat_max, lat_min,lon_max, lon_min,raw_data)
-            return results
-        else:
-            raise Exception
-    except Exception as e:
-        return {"success":False, "error":True, "message": f"There was an error during accessing datacube {e}"}
-### END OF DATACUVBE
-def store_coordinates(file_path, mongo_uri='mongodb://localhost:27017/'):
-    """
-    Reads coordinates from Excel, stores in MongoDB with correct (lat, lon) order,
-    and creates optimized index collections.
-    """
-    client = MongoClient(mongo_uri)
-    db_raw = client['raw_coordinates_db']
-    db_geo = client['geocoordinates_db']
-    
-    # Create unified index collection
-    index_db = client['coordinate_index_db']
-    lat_index_coll = index_db['latitude_index']
-    lat_index_coll.create_index("latitude")
-    
-    # Track processed latitudes
-    processed_lats = set()
-    
-    wb = load_workbook(filename=file_path, read_only=True)
-    sheet = wb.active
-    
-    for row_idx, row in enumerate(sheet.iter_rows(min_row=2)):
-        for col_idx, cell in enumerate(row[1:], start=1):
-            value = cell.value
-            if not value or not isinstance(value, str):
-                continue
-                
-            match = re.match(r'\(([^,]+),\s*([^)]+)\)', value.strip())
-            if not match:
-                continue
-                
-            # Extract and swap values: first is latitude, second is longitude
-            lat_str, lon_str = match.groups()
-            try:
-                lat_val = float(lat_str.strip())
-                lon_val = float(lon_str.strip())
-            except ValueError:
-                continue
-                
-            # Create collection name from latitude
-            collection_name = f"lat_{lat_val:.6f}"
-            
-            # Insert into raw database
-            raw_coll = db_raw[collection_name]
-            raw_coll.insert_one({
-                'latitude': lat_val,
-                'longitude': lon_val
-            })
-            
-            # Insert into GeoJSON database
-            geo_coll = db_geo[collection_name]
-            geo_coll.insert_one({
-                'location': {
-                    'type': 'Point',
-                    'coordinates': [lon_val, lat_val]  # GeoJSON: [lon, lat]
-                }
-            })
-            
-            # Create geospatial index for new collections
-            if lat_val not in processed_lats:
-                geo_coll.create_index([('location', GEOSPHERE)])
-                # Add to unified index
-                lat_index_coll.insert_one({
-                    'latitude': lat_val,
-                    'collection': collection_name
-                })
-                processed_lats.add(lat_val)
-    
-    wb.close()
-    client.close()
-def bin_search(sorted_lats,top_left, top_right, bottom_left, bottom_right, lat_max, lat_min):
-    # Find latitude range using binary search
-    left_idx = bisect.bisect_left(sorted_lats, lat_min)
-    right_idx = bisect.bisect_right(sorted_lats, lat_max)
-    target_lats = sorted_lats[left_idx:right_idx+1]
-    return target_lats
-def get_index( mongo_uri='mongodb://localhost:27017/'):
-        client = MongoClient(mongo_uri)
-        index_db = client['coordinate_index_db']
-         # Get sorted latitude index
-        lat_index = index_db['latitude_index']
-        sorted_lats = sorted([doc['latitude'] for doc in lat_index.find({})])
-        return sorted_lats
-def get_data_from_db(target_lats ,lat_max,lat_min,lon_max,lon_min, mongo_uri='mongodb://localhost:27017/'):
-    client = MongoClient(mongo_uri)
-    db_raw = client['raw_coordinates_db']
-    db_geo = client['geocoordinates_db']
-    index_db = client['coordinate_index_db']
-    lat_index = index_db['latitude_index']
-    # Get collection names
-    collections = [doc['collection'] for doc in 
-                  lat_index.find({'latitude': {'$in': target_lats}})]    
-    # Query databases
-    raw_results = []
-    geo_results = []
-    for coll_name in collections:
-        # Raw database query
-        raw_coll = db_raw[coll_name]
-        raw_docs = list(raw_coll.find({
-            'longitude': {'$gte': lon_min, '$lte': lon_max}
-        }))
-        for doc in raw_docs:
-            doc.pop('_id', None)
-        raw_results.extend(raw_docs)
-        
-        # GeoJSON database query
-        geo_coll = db_geo[coll_name]
-        geo_docs = list(geo_coll.find({
-            'location': {
-                '$geoWithin': {
-                    '$geometry': {
-                        'type': 'Polygon',
-                        'coordinates': [[
-                            [lon_min, lat_min],
-                            [lon_max, lat_min],
-                            [lon_max, lat_max],
-                            [lon_min, lat_max],
-                            [lon_min, lat_min]
-                        ]]
-                    }
-                }
+
+    # Extract bounding box values
+    top_lat = top_left['latitude']
+    bottom_lat = bottom_left['latitude']
+    left_lng = top_left['longitude']
+    right_lng = top_right['longitude']
+
+    # Get all datacube collections for latitudes
+    latitude_collections = get_latitude_collections()
+
+    # Extract numeric latitude values for sorting (collections like latitude_37.421)
+    numeric_lats = [float(x.replace("latitude_", "")) for x in latitude_collections]
+
+    # Binary search for bounding collections
+    start_index = binary_search(numeric_lats, top_lat)
+    end_index = binary_search(numeric_lats, bottom_lat)
+
+    if start_index == -1 or end_index == -1:
+        return {"error": "Latitude range not found in index"}
+
+    selected_collections = latitude_collections[start_index:end_index + 1]
+
+    results = []
+
+    # Query all latitude collections in the bounding range
+    for coll_name in selected_collections:
+        filters = {
+            "longitude": {
+                "$gte": left_lng,
+                "$lte": right_lng
             }
-        }))
-        for doc in geo_docs:
-            doc.pop('_id', None)
-        geo_results.extend(geo_docs)
-    
-    client.close()    
+        }
+
+        data = get_data_datacube(collection_name=coll_name, filters=filters)
+
+        # Each collection has "documents" under "result"
+        docs = data.get("result", {}).get("documents", [])
+        results.extend(docs)
+
     return {
-        'raw_coordinates': raw_results,
-        'geo_coordinates': geo_results
+        "count": len(results),
+        "documents": results
     }
-def query_by_four_corners(top_left, top_right, bottom_left, bottom_right):
-    """
-    Query coordinates within bounding box defined by four (lat, lon) points.
-    Uses binary search on sorted latitude index for efficiency.
-    """
-    # Extract all points (each as (lat, lon))
-    points = [top_left, top_right, bottom_left, bottom_right]
-    # Calculate bounding box
-    lats = [float(p[0]) for p in points]
-    lons = [float(p[1]) for p in points]
-    lat_min, lat_max = min(lats), max(lats)
-    lon_min, lon_max = min(lons), max(lons)
-    sorted_lats = get_index()
-    target_lats = bin_search(sorted_lats, top_left,top_right,bottom_left,bottom_right,lat_max,lat_min)
-    results = get_data_from_db(target_lats,lat_max,lat_min,lon_max,lon_min)
-    return results
-    
-    
-   
-
-
-
-
-# store_coordinates('scaled_coords_200_200.xlsx')

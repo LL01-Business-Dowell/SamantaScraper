@@ -21,27 +21,22 @@ services:
     networks:
       - queue-net
 
-  inscriber:
-    build: ./inscribing_proj
-    container_name: inscriber_container
-    ports:
-      - "8002:8002"
-    env_file:
-      - ./inscribing_proj/dev.env
-    restart: always
-    volumes:
-      - ./inscribing_proj:/usr/src/app
-    environment:
-    # - PYTHONUNBUFFERED=1
-      API_KEY: ${API_KEY}
-      BASE_DATACUBE_URL: ${BASE_DATACUBE_URL}
-      DATABASE_ID: ${DATABASE_ID}
-      INDEX_COLLECTION_NAME: ${INDEX_COLLECTION_NAME}
-      DATABASE_NAME: ${DATABASE_NAME}
-      shm_size: 2gb
-      
-    networks:
-      - queue-net
+    inscriber:
+      build: ./inscribing_proj
+      container_name: inscriber_container
+      ports:
+        - "8002:8002"
+      env_file:
+        - ./inscribing_proj/dev.env
+      restart: always
+      volumes:
+        - ./inscribing_proj:/usr/src/app
+      environment:
+        PYTHONUNBUFFERED: 1
+        shm_size: 2gb
+      networks:
+        - queue-net
+
 
   frontend:
     build: ./frontend

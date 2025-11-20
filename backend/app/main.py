@@ -793,7 +793,7 @@ CRUD_COORDS_PATH = os.getenv("CRUD_COORDS_PATH", "/api/crud")
 CRUD_RESULTS_PATH = os.getenv("CRUD_RESULTS_PATH", "/api/crud")
 CRUD_API_KEY = os.getenv("CRUD_API_KEY", "")
 DATABASE_ID = os.getenv("DATABASE_ID", "")
-CRUD_COLLECTION_NAME = os.getenv("CRUD_COLLECTION_NAME", "google_review_data")
+CRUD_COLLECTION_NAME = os.getenv("CRUD_COLLECTION_NAME", "map_scraper_data")
 
 
 def _post_to_crud(path, document):
