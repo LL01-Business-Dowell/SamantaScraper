@@ -390,9 +390,9 @@ const App = () => {
                   Search radius: {radiusKm} km
                   <input
                     type="range"
-                    min="1"
-                    max="50"
-                    step="1"
+                    min="5"
+                    max="200"
+                    step="5"
                     value={radiusKm}
                     onChange={(e) => setRadiusKm(Number(e.target.value))}
                     className="slider-input"

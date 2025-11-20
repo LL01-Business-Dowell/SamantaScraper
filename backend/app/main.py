@@ -787,12 +787,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
 
 # CRUD/Datacube configuration
-CRUD_BASE_URL = os.getenv("CRUD_BASE_URL", "")            # e.g. https://datacube.uxlivinglab.online/
+INSCRIBER_URL = os.getenv("INSCRIBER_URL", "http://inscriber:8002/api/geo-query-cube/")
+CRUD_BASE_URL = os.getenv("CRUD_BASE_URL", "")
 CRUD_COORDS_PATH = os.getenv("CRUD_COORDS_PATH", "/api/crud")
 CRUD_RESULTS_PATH = os.getenv("CRUD_RESULTS_PATH", "/api/crud")
 CRUD_API_KEY = os.getenv("CRUD_API_KEY", "")
 DATABASE_ID = os.getenv("DATABASE_ID", "")
 CRUD_COLLECTION_NAME = os.getenv("CRUD_COLLECTION_NAME", "google_review_data")
+
 
 def _post_to_crud(path, document):
     """Post a single document to the CRUD API using Api-Key auth."""
@@ -818,8 +820,67 @@ def _post_to_crud(path, document):
         log_message(f"CRUD POST exception: {e}")
         return False
 
-INSCRIBER_URL = os.getenv("INSCRIBER_URL", "http://inscriber:8002/api/geo-query-cube/")
-DATABASE_ID = os.getenv("DATABASE_ID", "")
+
+def save_coordinates_to_crud(task_id, keyword, mode, centers, bounds, tiles, target_coords, email, radius_km):
+    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+    document = {
+        "sessionId": task_id,
+        "createdAt": now_iso,
+        "updatedAt": now_iso,
+        "status": "initialized",
+        "urls": [],
+        "results": {},
+        "metadata": {
+            "mode": mode,
+            "keyword": keyword,
+            "email": email,
+            "radiusKm": radius_km,
+            "centers": centers,
+            "bounds": {
+                "top_left": list(bounds[0]) if bounds else None,
+                "top_right": list(bounds[1]) if bounds else None,
+                "bottom_left": list(bounds[2]) if bounds else None,
+                "bottom_right": list(bounds[3]) if bounds else None,
+            },
+            "tiles": tiles,
+            "target_coords": target_coords,
+        },
+        "email": email,
+    }
+    _post_to_crud(CRUD_COORDS_PATH, document)
+
+
+def save_results_to_crud(task_id, keyword, results, task_snapshot):
+    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+    urls = [r.get("URL") for r in results if r.get("URL")]
+    metadata = {
+        "mode": "location" if task_snapshot.get("center") else "csv",
+        "keyword": keyword,
+        "email": task_snapshot.get("email", ""),
+        "radiusKm": task_snapshot.get("radius_km", None),
+        "centers": task_snapshot.get("centers") or ([list(task_snapshot.get("center"))] if task_snapshot.get("center") else []),
+        "bounds": {
+            "top_left": list(task_snapshot.get("bounds")[0]) if task_snapshot.get("bounds") else None,
+            "top_right": list(task_snapshot.get("bounds")[1]) if task_snapshot.get("bounds") else None,
+            "bottom_left": list(task_snapshot.get("bounds")[2]) if task_snapshot.get("bounds") else None,
+            "bottom_right": list(task_snapshot.get("bounds")[3]) if task_snapshot.get("bounds") else None,
+        } if task_snapshot.get("bounds") else None,
+        "tiles": task_snapshot.get("tiles"),
+        "target_coords": task_snapshot.get("target_coords"),
+        "country": task_snapshot.get("country", ""),
+        "city": task_snapshot.get("city", ""),
+    }
+    document = {
+        "sessionId": task_id,
+        "createdAt": now_iso,
+        "updatedAt": now_iso,
+        "status": "completed" if not task_snapshot.get("error") else "error",
+        "urls": urls,
+        "results": {"items": results},
+        "metadata": metadata,
+        "email": task_snapshot.get("email", ""),
+    }
+    _post_to_crud(CRUD_RESULTS_PATH, document)
 
 def get_city_coordinates(country: str, city: str):
     try:
@@ -833,14 +894,19 @@ def get_city_coordinates(country: str, city: str):
         for entry in data:
             if entry.get("ASCII Name", "").lower() == city.lower():
                 try:
-                    return float(entry.get("latitude")), float(entry.get("longitude"))
+                    coords = float(entry.get("latitude")), float(entry.get("longitude"))
+                    log_message(f"📍 Found coordinates for {city}, {country}: {coords}")
+                    return coords
                 except Exception:
                     return None
+        log_message(f"⚠️ City {city} not found in file {country_filename}")
         return None
     except Exception:
+        log_message(f"⚠️ Error reading city data for {country}: {traceback.format_exc()}")
         return None
 
 def fetch_inscriber_tiles(bounds):
+    log_message("🔄 Requesting tiles from inscriber")
     try:
         payload = {
             "top_left": list(bounds[0]),
@@ -852,7 +918,9 @@ def fetch_inscriber_tiles(bounds):
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list):
-            return [(float(p[0]), float(p[1])) for p in data]
+            tiles = [(float(p[0]), float(p[1])) for p in data]
+            log_message(f"🧩 Received {len(tiles)} tiles (list) from inscriber")
+            return tiles
         if isinstance(data, dict) and "raw_coordinates" in data:
             flat = []
             for block in data["raw_coordinates"]:
@@ -862,6 +930,7 @@ def fetch_inscriber_tiles(bounds):
                         lon = item.get("longitude") if isinstance(item, dict) else (item[1] if isinstance(item, (list, tuple)) and len(item) >= 2 else None)
                         if lat is not None and lon is not None:
                             flat.append((float(lat), float(lon)))
+            log_message(f"🧩 Received {len(flat)} tiles (raw_coordinates) from inscriber")
             return flat
         return []
     except Exception as e:
@@ -869,6 +938,7 @@ def fetch_inscriber_tiles(bounds):
         return []
 
 def build_target_coordinates(centers, relative_tiles):
+    log_message(f"📐 Building target coordinates: centers={len(centers)}, tiles={len(relative_tiles)}")
     if not relative_tiles:
         return centers
     targets = []
