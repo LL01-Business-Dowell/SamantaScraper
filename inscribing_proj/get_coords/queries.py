@@ -131,11 +131,6 @@ def binary_search(arr, value):
 # ============================================================
 
 def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_right):
-    """
-    Accepts 4 corners, finds all documents in bounding box.
-    Supports list OR dict input.
-    """
-
     # ---- Normalize inputs ----
     top_left = _normalize_point(top_left)
     top_right = _normalize_point(top_right)
@@ -154,13 +149,19 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     left_lng = top_left["longitude"]
     right_lng = top_right["longitude"]
 
+    # Convert latitudes to integer “bands”
+    top_lat_band = int(top_lat)
+    bottom_lat_band = int(bottom_lat)
+
     # ---- Fetch latitude index ----
     latitude_collections = get_latitude_collections()
 
-    numeric_lats = [float(c.replace("latitude_", "")) for c in latitude_collections]
+    # Convert index keys to integer bands
+    numeric_lats = [int(float(c.replace("latitude_", ""))) for c in latitude_collections]
 
-    start_index = binary_search(numeric_lats, top_lat)
-    end_index = binary_search(numeric_lats, bottom_lat)
+    # Binary search with integer bands
+    start_index = binary_search(numeric_lats, top_lat_band)
+    end_index = binary_search(numeric_lats, bottom_lat_band)
 
     if start_index < 0 or end_index < 0:
         return {"error": "Latitude range not found in index"}
@@ -169,7 +170,7 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
 
     results = []
 
-    # ---- Query into each collection ----
+    # ---- Query each selected collection ----
     for coll in selected:
         filters = {
             "longitude": {
@@ -187,3 +188,4 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
         "documents": results,
         "collections_scanned": selected
     }
+
