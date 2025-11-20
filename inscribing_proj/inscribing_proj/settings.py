@@ -25,14 +25,7 @@ SECRET_KEY = 'django-insecure-s#9z-&2#6+h98a#fhk82nrh7@=ml^08+p0pn9jovup*)uijq_v
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "inscriber",
-    "inscriber_container",
-    "map.uxlivinglab.online",
-]
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
