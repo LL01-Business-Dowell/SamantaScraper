@@ -2,6 +2,7 @@ import traceback
 import json
 import requests
 from decouple import config
+import time
 
 print("\n=== LOADING QUERIES.PY ===")
 
@@ -96,12 +97,24 @@ def get_data_datacube(collection_name=None, filters=None, page_size=200):
 # ============================================================
 
 def get_latitude_collections():
+    start = time.time()
+
     try:
         result = get_data_datacube(collection_name=INDEX_COLLECTION_NAME)
+        duration = time.time() - start
+
         collections = result.get("result", {}).get("collections", [])
+
+        print(f"\n=== Datacube index fetch time: {duration:.2f} seconds ===")
+        print(f"Collections returned: {len(collections)}")
+
         collections.sort()
         return collections
+
     except Exception as e:
+        duration = time.time() - start
+        print(f"\n=== Datacube index fetch FAILED after {duration:.2f} seconds ===")
+
         raise Exception(f"Failed to fetch latitude index: {e}")
 
 
@@ -131,6 +144,10 @@ def binary_search(arr, value):
 # ============================================================
 
 def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_right):
+
+    total_start = time.time()
+
+
     # ---- Normalize inputs ----
     top_left = _normalize_point(top_left)
     top_right = _normalize_point(top_right)
@@ -154,7 +171,12 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     bottom_lat_band = int(bottom_lat)
 
     # ---- Fetch latitude index ----
+    # latitude_collections = get_latitude_collections()
+    index_start = time.time()
     latitude_collections = get_latitude_collections()
+    index_duration = time.time() - index_start
+    print(f"\n=== Time to fetch latitude index: {index_duration:.2f} seconds ===")
+    print(f"Collections returned: {len(latitude_collections)}")
 
     # Convert index keys to integer bands
     numeric_lats = [int(float(c.replace("latitude_", ""))) for c in latitude_collections]
@@ -163,11 +185,17 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     start_index = binary_search(numeric_lats, top_lat_band)
     end_index = binary_search(numeric_lats, bottom_lat_band)
 
+    # if start_index < 0 or end_index < 0:
+    #     return {"error": "Latitude range not found in index"}
+
     if start_index < 0 or end_index < 0:
+        total_duration = time.time() - total_start
+        print(f"\n=== ERROR: Latitude range not found (after {total_duration:.2f} sec) ===")
         return {"error": "Latitude range not found in index"}
 
     selected = latitude_collections[start_index:end_index + 1]
 
+    data_start = time.time()
     results = []
 
     # ---- Query each selected collection ----
@@ -182,6 +210,13 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
         data = get_data_datacube(collection_name=coll, filters=filters)
         docs = data.get("result", {}).get("documents", [])
         results.extend(docs)
+    
+    data_duration = time.time() - data_start
+    print(f"\n=== Time to fetch data from Datacube: {data_duration:.2f} seconds ===")
+
+    # ---- Final total time ----
+    total_duration = time.time() - total_start
+    print(f"\n=== TOTAL Datacube query time: {total_duration:.2f} seconds ===")
 
     return {
         "count": len(results),
