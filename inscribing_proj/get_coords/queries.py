@@ -1,3 +1,6 @@
+import traceback
+print("\n=== LOADING QUERIES.PY ===")
+
 import json
 import requests
 from decouple import config
@@ -7,23 +10,46 @@ from decouple import config
 # ENVIRONMENT VARIABLES (loaded correctly for Docker)
 # ============================================================
 
-DATABASE_ID = config("DATABASE_ID")
-DATABASE_NAME = config("DATABASE_NAME")
-INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
+# DATABASE_ID = config("DATABASE_ID")
+# DATABASE_NAME = config("DATABASE_NAME")
+# INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
 
-API_KEY = config("API_KEY")
-BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
+# API_KEY = config("API_KEY")
+# BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
 
-CRUD_COORDS_PATH = config("CRUD_COORDS_PATH")       # e.g. /api/crud
-CRUD_RESULTS_PATH = config("CRUD_RESULTS_PATH")     # currently same as coords path
+# CRUD_COORDS_PATH = config("CRUD_COORDS_PATH")       # e.g. /api/crud
+# CRUD_RESULTS_PATH = config("CRUD_RESULTS_PATH")     # currently same as coords path
 
-CRUD_URL = f"{BASE_DATACUBE_URL.rstrip('/')}{CRUD_COORDS_PATH}"
+# CRUD_URL = f"{BASE_DATACUBE_URL.rstrip('/')}{CRUD_COORDS_PATH}"
 
 
-HEADERS = {
-    "Authorization": f"Api-Key {API_KEY}",
-    "Content-Type": "application/json"
-}
+# HEADERS = {
+#     "Authorization": f"Api-Key {API_KEY}",
+#     "Content-Type": "application/json"
+# }
+
+try:
+    # your existing code...
+    DATABASE_ID = config("DATABASE_ID")
+    DATABASE_NAME = config("DATABASE_NAME")
+    INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
+
+    API_KEY = config("API_KEY")
+    BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
+
+    CRUD_COORDS_PATH = config("CRUD_COORDS_PATH")
+    CRUD_RESULTS_PATH = config("CRUD_RESULTS_PATH")
+
+    print("Environment variables loaded:")
+    print("DATABASE_ID:", DATABASE_ID)
+    print("INDEX_COLLECTION_NAME:", INDEX_COLLECTION_NAME)
+    print("API_KEY present:", bool(API_KEY))
+
+except Exception as e:
+    print("\n=== ERROR LOADING ENV VARIABLES ===")
+    traceback.print_exc()
+    print("===================================\n")
+    raise
 
 
 # ============================================================

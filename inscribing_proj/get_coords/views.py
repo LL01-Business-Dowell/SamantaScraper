@@ -1,8 +1,21 @@
+import traceback
+print("\n=== LOADING VIEWS.PY ===")
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .serializers import BoundingBoxSerializer
-from .queries import query_by_four_corners_datacube
+# from .queries import query_by_four_corners_datacube
+try:
+    from .queries import query_by_four_corners_datacube
+    print("Imported queries successfully")
+except Exception as e:
+    print("\n=== ERROR IMPORTING QUERIES ===")
+    traceback.print_exc()
+    print("================================\n")
+    raise
+
+
 
 
 class GeoQueryView(APIView):
