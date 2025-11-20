@@ -21,21 +21,21 @@ services:
     networks:
       - queue-net
 
-    inscriber:
-      build: ./inscribing_proj
-      container_name: inscriber_container
-      ports:
-        - "8002:8002"
-      env_file:
-        - ./inscribing_proj/dev.env
-      restart: always
-      volumes:
-        - ./inscribing_proj:/usr/src/app
-      environment:
-        PYTHONUNBUFFERED: 1
-        shm_size: 2gb
-      networks:
-        - queue-net
+  inscriber:
+    build: ./inscribing_proj
+    container_name: inscriber_container
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./inscribing_proj/dev.env
+    restart: always
+    volumes:
+      - ./inscribing_proj:/usr/src/app
+    environment:
+      PYTHONUNBUFFERED: 1
+      shm_size: 2gb
+    networks:
+      - queue-net
 
 
   frontend:
