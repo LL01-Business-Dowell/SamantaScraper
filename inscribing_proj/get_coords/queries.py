@@ -3,6 +3,7 @@ import json
 import requests
 from decouple import config
 import time
+import os
 
 print("\n=== LOADING QUERIES.PY ===")
 
@@ -144,9 +145,7 @@ def binary_search(arr, value):
 # ============================================================
 
 def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_right):
-
     total_start = time.time()
-
 
     # ---- Normalize inputs ----
     top_left = _normalize_point(top_left)
@@ -160,67 +159,47 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     print("BL:", bottom_left)
     print("BR:", bottom_right)
 
-    # ---- Extract bounding box ----
-    top_lat = top_left["latitude"]
-    bottom_lat = bottom_left["latitude"]
-    left_lng = top_left["longitude"]
-    right_lng = top_right["longitude"]
+    # ---- Build payload for inscriber ----
+    payload = {
+        "top_left": [top_left["latitude"], top_left["longitude"]],
+        "top_right": [top_right["latitude"], top_right["longitude"]],
+        "bottom_left": [bottom_left["latitude"], bottom_left["longitude"]],
+        "bottom_right": [bottom_right["latitude"], bottom_right["longitude"]],
+    }
 
-    # Convert latitudes to integer “bands”
-    top_lat_band = int(top_lat)
-    bottom_lat_band = int(bottom_lat)
+    INSCRIBER_URL = os.getenv("INSCRIBER_URL")
 
-    # ---- Fetch latitude index ----
-    # latitude_collections = get_latitude_collections()
-    index_start = time.time()
-    latitude_collections = get_latitude_collections()
-    index_duration = time.time() - index_start
-    print(f"\n=== Time to fetch latitude index: {index_duration:.2f} seconds ===")
-    print(f"Collections returned: {len(latitude_collections)}")
+    try:
+        print("\n=== Sending payload to inscriber ===")
+        print("URL:", INSCRIBER_URL)
+        print("Payload:", json.dumps(payload, indent=2))
 
-    # Convert index keys to integer bands
-    numeric_lats = [int(float(c.replace("latitude_", ""))) for c in latitude_collections]
+        data_start = time.time()
+        response = requests.post(INSCRIBER_URL, json=payload)
+        data_duration = time.time() - data_start
 
-    # Binary search with integer bands
-    start_index = binary_search(numeric_lats, top_lat_band)
-    end_index = binary_search(numeric_lats, bottom_lat_band)
+        print(f"\n=== Time to fetch data from inscriber: {data_duration:.2f} seconds ===")
+        response.raise_for_status()
+        inscriber_result = response.json()
 
-    # if start_index < 0 or end_index < 0:
-    #     return {"error": "Latitude range not found in index"}
-
-    if start_index < 0 or end_index < 0:
-        total_duration = time.time() - total_start
-        print(f"\n=== ERROR: Latitude range not found (after {total_duration:.2f} sec) ===")
-        return {"error": "Latitude range not found in index"}
-
-    selected = latitude_collections[start_index:end_index + 1]
-
-    data_start = time.time()
-    results = []
-
-    # ---- Query each selected collection ----
-    for coll in selected:
-        filters = {
-            "longitude": {
-                "$gte": left_lng,
-                "$lte": right_lng,
-            }
+        # ---- Wrap inscriber response to match original format ----
+        results = {
+            "count": len(inscriber_result.get("documents", inscriber_result)),  # fallback if key not present
+            "documents": inscriber_result.get("documents", inscriber_result),
+            "collections_scanned": ["inscriber_endpoint"]
         }
 
-        data = get_data_datacube(collection_name=coll, filters=filters)
-        docs = data.get("result", {}).get("documents", [])
-        results.extend(docs)
-    
-    data_duration = time.time() - data_start
-    print(f"\n=== Time to fetch data from Datacube: {data_duration:.2f} seconds ===")
+    except Exception as e:
+        data_duration = time.time() - data_start
+        print(f"\n=== ERROR fetching data from inscriber after {data_duration:.2f} seconds ===")
+        traceback.print_exc()
+        return {"error": str(e)}
 
     # ---- Final total time ----
     total_duration = time.time() - total_start
     print(f"\n=== TOTAL Datacube query time: {total_duration:.2f} seconds ===")
 
-    return {
-        "count": len(results),
-        "documents": results,
-        "collections_scanned": selected
-    }
+    return results
+
+
 
