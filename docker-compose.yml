@@ -15,7 +15,7 @@ services:
       - CRUD_BASE_URL=https://datacube.uxlivinglab.online/
       - CRUD_COORDS_PATH=/api/crud
       - CRUD_RESULTS_PATH=/api/crud
-      - CRUD_API_KEY=sk_test_lbV1EV3-mQJ5VKlDzJHHa0xywsdEZGhAFPk6EPwce8k
+      - CRUD_API_KEY=API-Key sk_test_lbV1EV3-mQJ5VKlDzJHHa0xywsdEZGhAFPk6EPwce8k
       - DATABASE_ID=690346e64b13cf4d1be78d89
     shm_size: 2gb
     networks:
