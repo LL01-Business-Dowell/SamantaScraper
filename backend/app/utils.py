@@ -1,6 +1,23 @@
 import csv
 import io
+import logging
+import datetime
+import requests
 from typing import List, Dict, Any
+from decouple import config
+
+inscriber_url = config("INSCRIBER_URL")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def log_message(message):
+    """Add message to logs and print it"""
+    timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+    log_entry = f"[{timestamp}] {message}"
+    print(log_entry)
+    logger.info(log_entry)
 
 def parse_csv(file_content: bytes) -> List[str]:
     """
@@ -69,3 +86,49 @@ def calculate_boundary_points(d):
     right_mid = tuple((lat, lon + d*t))
 
     return top_left, top_right, bottom_left, bottom_right
+
+def fetch_inscriber_tiles(bounds):
+    log_message("🔄 Requesting tiles from inscriber")
+    try:
+        payload = {
+            "top_left": bounds[0],
+            "top_right": bounds[1],
+            "bottom_left": bounds[2],
+            "bottom_right": bounds[3]
+        }
+
+        resp = requests.post(inscriber_url, json=payload, timeout=(10, 300))
+        resp.raise_for_status()
+
+        data = resp.json()
+
+        # Log how many points were returned
+        if isinstance(data, list):
+            log_message(f"🧩 Received {len(data)} tiles from inscriber")
+        else:
+            log_message("🧩 Received non-list response from inscriber")
+
+        return data  #return json
+
+    except Exception as e:
+        log_message(f"⚠️ Inscriber fetch failed: {e}")
+        return []
+    
+
+def apply_center_offset(center, inscribed_points):
+    center_lat, center_lon = center
+    final_points = []
+
+    for item in inscribed_points:
+        lat_offset = float(item["latitude"])
+        lon_offset = float(item["longitude"])
+
+        final_lat = center_lat + lat_offset
+        final_lon = center_lon + lon_offset
+
+        final_points.append({
+            "latitude": final_lat,
+            "longitude": final_lon
+        })
+
+    return final_points

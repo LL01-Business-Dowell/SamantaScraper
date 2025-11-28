@@ -5,3 +5,5 @@ selenium-stealth
 pandas
 webdriver-manager
 python-multipart
+python-decouple
+

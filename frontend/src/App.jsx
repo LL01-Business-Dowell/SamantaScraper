@@ -32,6 +32,7 @@ const App = () => {
 
   // Add these new state variables
   const [searchType, setSearchType] = useState("file"); // "file" or "location"
+  const [radiusKm, setRadiusKm] = useState(5);
 
   axios.defaults.baseURL = API_BASE_URL;
 
@@ -107,6 +108,7 @@ const App = () => {
       formData.append("file", file);
       formData.append("keyword", keyword);
       formData.append("email", email);
+      formData.append("radius_km", String(radiusKm));
 
       try {
         const response = await axios.post("/upload/", formData);
@@ -127,6 +129,7 @@ const App = () => {
       formData.append("email", email);
       formData.append("country", selectedCountry);
       formData.append("city", selectedCity);
+      formData.append("radius_km", String(radiusKm));
 
       try {
         // API call for location-based search
@@ -379,6 +382,23 @@ const App = () => {
                   required
                   className="form-input"
                 />
+              </div>
+
+              {/* Radius Slider - Common for both search types */}
+              <div className="input-container">
+                <label className="slider-label" style={{ width: '100%' }}>
+                  Search radius: {radiusKm} km
+                  <input
+                    type="range"
+                    min="5"
+                    max="200"
+                    step="5"
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(Number(e.target.value))}
+                    className="slider-input"
+                    style={{ width: '100%' }}
+                  />
+                </label>
               </div>
 
               {/* Location Selection - Only shown when location search type is selected */}

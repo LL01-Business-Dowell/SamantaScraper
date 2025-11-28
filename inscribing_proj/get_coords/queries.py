@@ -5,18 +5,38 @@ import bisect
 import requests
 import json
 from decouple import config
+import traceback
 
-database_id = config("DATABASE_ID")
-datacube_api_url = config("BASE_DATACUBE_URL")
-crud_url = datacube_api_url+"api/crud"
-api_key=config("API_KEY")
 
-headers = {
-        "Authorization": f"Api-Key {api_key}",
-        "Content-Type": "application/json"
-    }
+try:
+    database_id = config("DATABASE_ID")
+    datacube_api_url = config("BASE_DATACUBE_URL")
+    crud_url = datacube_api_url+"api/crud"
+    api_key = config("API_KEY")
+    collection_name = config("INDEX_COLLECTION_NAME")
+
+    headers = {
+            "Authorization": f"Api-Key {api_key}",
+            "Content-Type": "application/json"
+        }
+    
+    print("Environment variables loaded:")
+    print("DATABASE_ID:", database_id)
+    print("INDEX_COLLECTION_NAME:", collection_name)
+    print("API_KEY present:", bool(api_key))
+
+except:
+    print("\n=== ERROR LOADING ENV VARIABLES ===")
+    traceback.print_exc()
+    print("===================================\n")
+    raise
+
+
 ### DATACUBE QUERIES ###
-def get_data_datacube(collection_name=config("INDEX_COLLECTION_NAME"),filters={}):
+def get_data_datacube(collection_name = None , filters={}):
+    if collection_name is None:
+        collection_name = config("INDEX_COLLECTION_NAME")
+        
     length =len( list(filters.keys()))
     if length:
         filters = json.dumps(filters)

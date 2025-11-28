@@ -1,23 +1,21 @@
 # Use a Python base image
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Set the working directory
 WORKDIR /usr/src/app
 
-# Install dependencies
+# Copy only requirements first for caching
 COPY requirements.txt /usr/src/app/
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy the rest of the code
 COPY . /usr/src/app/
 
-# Port the application runs on
-EXPOSE 8001
+EXPOSE 8002
 
-# Command to run the Django development server
-# IMPORTANT: It must run on 0.0.0.0 and on the EXPOSEd port
+# Run Django
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8002"]
