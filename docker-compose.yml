@@ -196,8 +196,10 @@ services:
       - queue-net
     environment:
       - VITE_API_URL=https://map.uxlivinglab.online/api
-    # command: sh -c "npm install && npm run build && tail -f /dev/null"  # build frontend
-    command: sh -c "npm install && npm run build"
+    command: sh -c "npm install && npm run build && tail -f /dev/null"  # build frontend
+    volumes:
+      - frontend_build:/usr/src/app/dist  # share dist folder
+    # command: sh -c "npm install && npm run build"
 
   nginx:
     build:
@@ -207,7 +209,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./frontend/dist:/usr/share/nginx/html:ro
+      - frontend_build:/usr/share/nginx/html:ro
+      # - ./frontend/dist:/usr/share/nginx/html:ro
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # - ./frontend/dist:/home/SamantaScraper/frontend/dist:ro   # point to built files
     restart: unless-stopped
@@ -220,3 +223,7 @@ services:
 networks:
   queue-net:
     driver: bridge
+
+volumes:
+  frontend_build:
+
