@@ -23,9 +23,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-s#9z-&2#6+h98a#fhk82nrh7@=ml^08+p0pn9jovup*)uijq_v'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["*"]
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["backend", "inscriber", "frontend", "localhost", "map.uxlivinglab.online"]
+
 
 
 # Application definition

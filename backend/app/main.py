@@ -22,7 +22,7 @@ import logging
 import datetime
 import random
 import requests
-from .utils import calculate_boundary_points
+from .utils import calculate_boundary_points, fetch_inscriber_tiles, apply_center_offset
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -138,12 +138,18 @@ def init_driver():
     log_message("🌐 Setting up Chrome driver...")
 
     try:
-        from webdriver_manager.chrome import ChromeDriverManager
+        # from webdriver_manager.chrome import ChromeDriverManager
+        # from selenium.webdriver.chrome.service import Service as ChromeService
+
+        # log_message("🔄 Using WebDriver Manager to get compatible chromedriver...")
+        # service = ChromeService(ChromeDriverManager().install())
+        # driver = webdriver.Chrome(service=service, options=options)
         from selenium.webdriver.chrome.service import Service as ChromeService
 
-        log_message("🔄 Using WebDriver Manager to get compatible chromedriver...")
-        service = ChromeService(ChromeDriverManager().install())
+        log_message("🔄 Using pre-installed chromedriver in container...")
+        service = ChromeService(executable_path="/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
+
 
         # Enhanced anti-detection
         driver.execute_script("""
@@ -390,199 +396,226 @@ def extract_restaurant_details(driver, url, task_id):
     
     return details
 
-def scrape_Maps_location(task_id, keyword, country, city):
+def scrape_Maps_location(task_id, keyword, country, city, final_points_json):
     """Scrape Google Maps for businesses in a specific location with improved error handling"""
-    driver = None
-    try:
-        driver = init_driver()
-        if not driver:
-            log_message("❌ Failed to initialize driver")
-            tasks[task_id]["running"] = False
-            tasks[task_id]["error"] = "Failed to initialize web driver"
-            return
+    for point in final_points_json:
+        lat = point["latitude"]
+        lon = point["longitude"]
 
-        search_query = f"{keyword} in {city}, {country}"
-        maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
-        
-        log_message(f"🔍 Searching for: {search_query}")
+        driver = None
+        try:
+            driver = init_driver()
+            if not driver:
+                log_message("❌ Failed to initialize driver")
+                tasks[task_id]["running"] = False
+                tasks[task_id]["error"] = "Failed to initialize web driver"
+                return
 
-        # Load the search page
-        driver.get(maps_url)
-        smart_sleep(8, 12, "for initial page load")
-
-        # Wait for results with multiple attempts
-        results_loaded = False
-        for attempt in range(5):
-            try:
-                selectors_to_try = [
-                    "//div[@role='feed']",
-                    "//div[@aria-label='Results for']",
-                    "//div[contains(@class, 'Nv2PK')]",
-                    "//div[@data-result-index]"
-                ]
-                
-                for selector in selectors_to_try:
-                    try:
-                        WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.XPATH, selector))
-                        )
-                        results_loaded = True
-                        log_message(f"✓ Found results with selector: {selector}")
-                        break
-                    except:
-                        continue
-                
-                if results_loaded:
-                    break
-                    
-                log_message(f"Attempt {attempt + 1}/5 failed, retrying...")
-                time.sleep(5)
-                
-            except Exception as e:
-                log_message(f"Attempt {attempt + 1} error: {e}")
-
-        if not results_loaded:
-            log_message("❌ Could not find any results")
-            tasks[task_id]["error"] = "No results found"
-            tasks[task_id]["running"] = False
-            return
-
-        # Process results with improved selectors
-        results = []
-        processed_urls = set()
-        
-        # INCREASED SCROLLING - Scroll and collect results
-        for scroll_attempt in range(50):  # INCREASED from 10 to 50
-            if not tasks.get(task_id, {}).get("running", False):
-                break
-                
-            # Find all clickable result items
-            result_items = []
+            search_query = f"{keyword} in {lat}, {lon}, {city}, {country}"
+            maps_url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
             
-            # Try multiple selectors to find result items
-            item_selectors = [
-                "//div[@role='feed']//a[contains(@href, '/maps/place/')]",
-                "//div[contains(@class, 'Nv2PK')]//a[contains(@href, '/maps/place/')]",
-                "//a[contains(@href, '/maps/place/')]"
-            ]
-            
-            for selector in item_selectors:
+            log_message(f"🔍 Searching for: {search_query}")
+
+            # Load the search page
+            driver.get(maps_url)
+            smart_sleep(8, 12, "for initial page load")
+
+            # Wait for results with multiple attempts
+            results_loaded = False
+            for attempt in range(5):
                 try:
-                    items = driver.find_elements(By.XPATH, selector)
-                    if items:
-                        result_items = items
+                    selectors_to_try = [
+                        "//div[@role='feed']",
+                        "//div[@aria-label='Results for']",
+                        "//div[contains(@class, 'Nv2PK')]",
+                        "//div[@data-result-index]"
+                    ]
+                    
+                    for selector in selectors_to_try:
+                        try:
+                            WebDriverWait(driver, 10).until(
+                                EC.presence_of_element_located((By.XPATH, selector))
+                            )
+                            results_loaded = True
+                            log_message(f"✓ Found results with selector: {selector}")
+                            break
+                        except:
+                            continue
+                    
+                    if results_loaded:
                         break
-                except:
-                    continue
+                        
+                    log_message(f"Attempt {attempt + 1}/5 failed, retrying...")
+                    time.sleep(5)
+                    
+                except Exception as e:
+                    log_message(f"Attempt {attempt + 1} error: {e}")
+
+            if not results_loaded:
+                log_message("❌ Could not find any results")
+                tasks[task_id]["error"] = "No results found"
+                tasks[task_id]["running"] = False
+                return
+
+            # Process results with improved selectors
+            results = []
+            processed_urls = set()
             
-            if not result_items:
-                log_message("No result items found, trying to scroll more...")
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(3)
-                continue
-            
-            log_message(f"Found {len(result_items)} potential results")
-            
-            # INCREASED PROCESSING - Process each result
-            for item in result_items[:15]:  # INCREASED from 5 to 15 per scroll
+            # INCREASED SCROLLING - Scroll and collect results
+            for scroll_attempt in range(50):  # INCREASED from 10 to 50
                 if not tasks.get(task_id, {}).get("running", False):
                     break
                     
-                try:
-                    url = item.get_attribute("href")
-                    if not url or url in processed_urls:
+                # Find all clickable result items
+                result_items = []
+                
+                # Try multiple selectors to find result items
+                item_selectors = [
+                    "//div[@role='feed']//a[contains(@href, '/maps/place/')]",
+                    "//div[contains(@class, 'Nv2PK')]//a[contains(@href, '/maps/place/')]",
+                    "//a[contains(@href, '/maps/place/')]"
+                ]
+                
+                for selector in item_selectors:
+                    try:
+                        items = driver.find_elements(By.XPATH, selector)
+                        if items:
+                            result_items = items
+                            break
+                    except:
                         continue
-                    
-                    processed_urls.add(url)
-                    
-                    # Click and extract details
-                    driver.execute_script("arguments[0].scrollIntoView(true);", item)
+                
+                if not result_items:
+                    log_message("No result items found, trying to scroll more...")
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(3)
+                    continue
+                
+                log_message(f"Found {len(result_items)} potential results")
+                
+                # INCREASED PROCESSING - Process each result
+                for item in result_items[:15]:  # INCREASED from 5 to 15 per scroll
+                    if not tasks.get(task_id, {}).get("running", False):
+                        break
+                        
+                    try:
+                        url = item.get_attribute("href")
+                        if not url or url in processed_urls:
+                            continue
+                        
+                        processed_urls.add(url)
+                        
+                        # Click and extract details
+                        driver.execute_script("arguments[0].scrollIntoView(true);", item)
+                        time.sleep(2)
+                        
+                        item.click()
+                        smart_sleep(5, 8, "for business page to load")
+                        
+                        # Extract details
+                        details = extract_restaurant_details(driver, url, task_id)
+                        
+                        if details["Name"] != "N/A":
+                            business_data = {
+                                "Name": details["Name"],
+                                "Address": details["Address"],
+                                "Phone": details["Phone"],
+                                "Website": details["Website"],
+                                "URL": url,
+                                "City": city,
+                                "Country": country,
+                                "Rating": details["Rating"],
+                                "Reviews": details["Reviews"],
+                                "Reviews_Count": details["Reviews_Count"],
+                                "Plus Code": details["Plus Code"],
+                                "Category": details["Category"],
+                                "Hours": details["Hours"],
+                                "Has_Multiple_Locations": details["Has_Multiple_Locations"],
+                                "Has_Contact_Info": details["Has_Contact_Info"],
+                                "Has_Sufficient_Reviews": details["Has_Sufficient_Reviews"],
+                                "Has_Working_Hours": details["Has_Working_Hours"],
+                            }
+                            
+                            results.append(business_data)
+                            tasks[task_id]["results"] = results
+                            tasks[task_id]["progress"] = len(results)
+                            
+                            log_message(f"✅ Processed: {details['Name']} (Total: {len(results)})")
+                        
+                        # Go back to results
+                        driver.back()
+                        smart_sleep(3, 5, "after going back")
+                        
+                    except Exception as e:
+                        log_message(f"❌ Error processing result: {e}")
+                        continue
+                
+                # Enhanced scrolling strategy
+                try:
+                    # Multiple scroll techniques
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                     time.sleep(2)
                     
-                    item.click()
-                    smart_sleep(5, 8, "for business page to load")
+                    # Try scrolling the results panel specifically
+                    feed_element = driver.find_element(By.XPATH, "//div[@role='feed']")
+                    driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed_element)
+                    time.sleep(2)
                     
-                    # Extract details
-                    details = extract_restaurant_details(driver, url, task_id)
-                    
-                    if details["Name"] != "N/A":
-                        business_data = {
-                            "Name": details["Name"],
-                            "Address": details["Address"],
-                            "Phone": details["Phone"],
-                            "Website": details["Website"],
-                            "URL": url,
-                            "City": city,
-                            "Country": country,
-                            "Rating": details["Rating"],
-                            "Reviews": details["Reviews"],
-                            "Reviews_Count": details["Reviews_Count"],
-                            "Plus Code": details["Plus Code"],
-                            "Category": details["Category"],
-                            "Hours": details["Hours"],
-                            "Has_Multiple_Locations": details["Has_Multiple_Locations"],
-                            "Has_Contact_Info": details["Has_Contact_Info"],
-                            "Has_Sufficient_Reviews": details["Has_Sufficient_Reviews"],
-                            "Has_Working_Hours": details["Has_Working_Hours"],
-                        }
-                        
-                        results.append(business_data)
-                        tasks[task_id]["results"] = results
-                        tasks[task_id]["progress"] = len(results)
-                        
-                        log_message(f"✅ Processed: {details['Name']} (Total: {len(results)})")
-                    
-                    # Go back to results
-                    driver.back()
-                    smart_sleep(3, 5, "after going back")
+                    # Check if we've reached the end
+                    current_height = driver.execute_script("return document.body.scrollHeight")
+                    if scroll_attempt > 0:
+                        if hasattr(scrape_Maps_location, 'last_height') and current_height == scrape_Maps_location.last_height:
+                            no_new_content_count = getattr(scrape_Maps_location, 'no_new_content_count', 0) + 1
+                            scrape_Maps_location.no_new_content_count = no_new_content_count
+                            if no_new_content_count >= 5:  # Stop if no new content for 5 scrolls
+                                log_message("No new content found, stopping scroll")
+                                break
+                        else:
+                            scrape_Maps_location.no_new_content_count = 0
+                    scrape_Maps_location.last_height = current_height
                     
                 except Exception as e:
-                    log_message(f"❌ Error processing result: {e}")
-                    continue
+                    log_message(f"Error during scrolling: {e}")
+                    break
             
-            # Enhanced scrolling strategy
-            try:
-                # Multiple scroll techniques
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(2)
-                
-                # Try scrolling the results panel specifically
-                feed_element = driver.find_element(By.XPATH, "//div[@role='feed']")
-                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", feed_element)
-                time.sleep(2)
-                
-                # Check if we've reached the end
-                current_height = driver.execute_script("return document.body.scrollHeight")
-                if scroll_attempt > 0:
-                    if hasattr(scrape_Maps_location, 'last_height') and current_height == scrape_Maps_location.last_height:
-                        no_new_content_count = getattr(scrape_Maps_location, 'no_new_content_count', 0) + 1
-                        scrape_Maps_location.no_new_content_count = no_new_content_count
-                        if no_new_content_count >= 5:  # Stop if no new content for 5 scrolls
-                            log_message("No new content found, stopping scroll")
-                            break
-                    else:
-                        scrape_Maps_location.no_new_content_count = 0
-                scrape_Maps_location.last_height = current_height
-                
-            except Exception as e:
-                log_message(f"Error during scrolling: {e}")
-                break
-        
-        log_message(f"🎉 Scraping completed! Found {len(results)} businesses")
-        
-    except Exception as e:
-        log_message(f"❌ Critical error: {e}")
-        log_message(f"❌ Traceback: {traceback.format_exc()}")
-        tasks[task_id]["error"] = str(e)
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
-        tasks[task_id]["running"] = False
-        log_message(f"Task {task_id} completed with {len(tasks[task_id].get('results', []))} results")
+            log_message(f"🎉 Scraping completed! Found {len(results)} businesses")
+            
+        except Exception as e:
+            log_message(f"❌ Critical error: {e}")
+            log_message(f"❌ Traceback: {traceback.format_exc()}")
+            tasks[task_id]["error"] = str(e)
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
+            tasks[task_id]["running"] = False
+            log_message(f"Task {task_id} completed with {len(tasks[task_id].get('results', []))} results")
 
+def get_city_coordinates(country: str, city: str):
+    try:
+        country_files = {f.lower(): f for f in os.listdir(JSON_FOLDER) if f.endswith(".json")}
+        country_filename = country.lower() + ".json"
+        if country_filename not in country_files:
+            return None
+        file_path = os.path.join(JSON_FOLDER, country_files[country_filename])
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for entry in data:
+            if entry.get("ASCII Name", "").lower() == city.lower():
+                try:
+                    coords = float(entry.get("latitude")), float(entry.get("longitude"))
+                    log_message(f"📍 Found coordinates for {city}, {country}: {coords}")
+                    return coords
+                except Exception:
+                    return None
+        log_message(f"⚠️ City {city} not found in file {country_filename}")
+        return None
+    except Exception:
+        log_message(f"⚠️ Error reading city data for {country}: {traceback.format_exc()}")
+        return None
+    
 def scrape_Maps(task_id, location_data, keyword):
     """Scrape Google Maps for businesses across multiple locations with improved error handling"""
     driver = None
@@ -1134,27 +1167,27 @@ async def search_by_location(keyword: str = Form(...), country: str = Form(...),
         "country": country,
         "started_at": time.time()
     }
-    
+
     center = get_city_coordinates(country, city)
     if not center:
         tasks[task_id]["error"] = "Could not determine coordinates for selected city"
         tasks[task_id]["running"] = False
         return JSONResponse(status_code=400, content={"error": tasks[task_id]["error"]})
-
+    
     bounds = calculate_boundary_points(float(radius_km))
-    tiles = fetch_inscriber_tiles(bounds)
-    target_coords = build_target_coordinates([center], tiles)
+    inscribed_points = fetch_inscriber_tiles(bounds)
+    # Flatten
+    flattened_inscribed_points = [
+        point
+        for sublist in inscribed_points.get("raw_coordinates", [])
+        for point in sublist
+    ]
+    final_points_json = apply_center_offset(center, flattened_inscribed_points)
 
-    tasks[task_id]["center"] = center
-    tasks[task_id]["bounds"] = bounds
-    tasks[task_id]["tiles"] = tiles
-    tasks[task_id]["target_coords"] = target_coords
-    tasks[task_id]["email"] = email
-    tasks[task_id]["radius_km"] = radius_km
 
     try:
-        threading.Thread(target=scrape_by_coordinates, args=(task_id, keyword, target_coords)).start()
-        log_message(f"🚀 Started coordinate scraping task {task_id} for {keyword} around {center}")
+        threading.Thread(target=scrape_Maps_location, args=(task_id, keyword, country, city, final_points_json)).start()
+        log_message(f"🚀 Started scraping task {task_id} for {keyword} in {city}, {country}")
     except Exception as e:
         tasks[task_id]["error"] = f"Failed to start scraping thread: {str(e)}"
         tasks[task_id]["running"] = False

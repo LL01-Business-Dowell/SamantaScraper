@@ -2,32 +2,53 @@ import traceback
 import json
 import requests
 from decouple import config
-import time
-import os
+import traceback
 
-print("\n=== LOADING QUERIES.PY ===")
-
-# ============================================================
-# Load ENV VARIABLES
-# ============================================================
 
 try:
-    DATABASE_ID = config("DATABASE_ID")
-    DATABASE_NAME = config("DATABASE_NAME")
-    INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
+    database_id = config("DATABASE_ID")
+    datacube_api_url = config("BASE_DATACUBE_URL")
+    crud_url = datacube_api_url+"api/crud"
+    api_key = config("API_KEY")
+    collection_name = config("INDEX_COLLECTION_NAME")
 
-    API_KEY = config("API_KEY")
-    BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
+    headers = {
+            "Authorization": f"Api-Key {api_key}",
+            "Content-Type": "application/json"
+        }
+    
+    print("Environment variables loaded:")
+    print("DATABASE_ID:", database_id)
+    print("INDEX_COLLECTION_NAME:", collection_name)
+    print("API_KEY present:", bool(api_key))
 
-    CRUD_COORDS_PATH = config("CRUD_COORDS_PATH", default="/api/crud")
-    CRUD_RESULTS_PATH = config("CRUD_RESULTS_PATH", default="/api/crud")
+except:
+    print("\n=== ERROR LOADING ENV VARIABLES ===")
+    traceback.print_exc()
+    print("===================================\n")
+    raise
 
-    CRUD_URL = f"{BASE_DATACUBE_URL.rstrip('/')}{CRUD_COORDS_PATH}"
 
-    HEADERS = {
-        "Authorization": f"Api-Key {API_KEY}",
-        "Content-Type": "application/json"
-    }
+### DATACUBE QUERIES ###
+def get_data_datacube(collection_name = None , filters={}):
+    if collection_name is None:
+        collection_name = config("INDEX_COLLECTION_NAME")
+        
+    length =len( list(filters.keys()))
+    if length:
+        filters = json.dumps(filters)
+    params =params = {
+    "database_id": database_id,
+    "collection_name": collection_name,
+    "filters": filters,
+    "page":1,
+    "page_size":202
+}
+
+    print(f"Get data datacube filters = {filters} length of filters = {length} collection_name {collection_name}")
+    
+    try:
+        res = requests.get(url=crud_url,params=params, headers=headers).json()
 
     print("Environment variables loaded:")
     print("DATABASE_ID:", DATABASE_ID)

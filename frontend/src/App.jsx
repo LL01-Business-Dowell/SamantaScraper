@@ -110,10 +110,11 @@ const App = () => {
       formData.append("email", email);
       formData.append("radius_km", String(radiusKm));
 
+      setIsRunning(true);
+
       try {
         const response = await axios.post("/upload/", formData);
         setTaskId(response.data.task_id);
-        setIsRunning(true);
         setSearchComplete(false);
       } catch (error) {
         console.error("Error starting the scraping process", error);
@@ -267,6 +268,7 @@ const App = () => {
     setResults([]);
     setIsRunning(false);
     setSearchComplete(false);
+    setRadiusKm(5);
   };
 
   return (
