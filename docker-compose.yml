@@ -154,6 +154,12 @@ services:
       - ./.env
     environment:
       - PYTHONUNBUFFERED=1
+      - INSCRIBER_URL=http://inscriber:8002/api/geo-query-cube/
+      - CRUD_BASE_URL=https://datacube.uxlivinglab.online/
+      - CRUD_COORDS_PATH=/api/crud
+      - CRUD_RESULTS_PATH=/api/crud
+      - CRUD_API_KEY=sk_test_lbV1EV3-mQJ5VKlDzJHHa0xywsdEZGhAFPk6EPwce8k
+      - DATABASE_ID=690346e64b13cf4d1be78d89
     shm_size: 2gb
     networks:
       - queue-net
@@ -172,14 +178,15 @@ services:
     env_file:
       - ./.env
     environment:
-      - PYTHONUNBUFFERED=1
-    shm_size: 2gb
+      PYTHONUNBUFFERED: 1
+      shm_size: 2gb
     networks:
       - queue-net
     command: python manage.py runserver 0.0.0.0:8002
     # optional for local dev hot reload
     # volumes:
     #   - ./inscribing_proj:/usr/src/app:cached
+
 
   frontend:
     build: ./frontend
@@ -197,7 +204,7 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: nginx
+    container_name: nginx_scraper
     ports:
       - "80:80"
     volumes:

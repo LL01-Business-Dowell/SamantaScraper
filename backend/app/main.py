@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException, WebDriverException
 import os
+import requests
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -31,7 +32,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "map.uxlivinglab.online"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://map.uxlivinglab.online",
+        "https://82.29.161.195"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,7 +109,7 @@ def init_driver():
     
     # ADDITIONAL PERFORMANCE OPTIMIZATIONS
     options.add_argument("--disable-images")  # Disable image loading for faster performance
-    options.add_argument("--disable-javascript")  # Only enable if it doesn't break functionality
+    # Keep JavaScript enabled to ensure Maps UI loads fully
     options.add_argument("--disable-plugins")
     options.add_argument("--disable-java")
     options.add_argument("--disable-background-timer-throttling")
@@ -814,6 +819,279 @@ def scrape_Maps(task_id, location_data, keyword):
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_FOLDER = os.path.join(BASE_DIR, "data", "countries")
 
+# CRUD/Datacube configuration
+INSCRIBER_URL = os.getenv("INSCRIBER_URL", "http://inscriber:8002/api/geo-query-cube/")
+CRUD_BASE_URL = os.getenv("CRUD_BASE_URL", "")
+CRUD_COORDS_PATH = os.getenv("CRUD_COORDS_PATH", "/api/crud")
+CRUD_RESULTS_PATH = os.getenv("CRUD_RESULTS_PATH", "/api/crud")
+CRUD_API_KEY = os.getenv("CRUD_API_KEY", "")
+DATABASE_ID = os.getenv("DATABASE_ID", "")
+CRUD_COLLECTION_NAME = os.getenv("CRUD_COLLECTION_NAME", "map_scraper_data")
+
+
+def _post_to_crud(path, document):
+    """Post a single document to the CRUD API using Api-Key auth."""
+    if not CRUD_BASE_URL or not DATABASE_ID:
+        log_message("CRUD config missing; skipping save")
+        return False
+    url = f"{CRUD_BASE_URL.rstrip('/')}{path}"
+    headers = {"Content-Type": "application/json"}
+    if CRUD_API_KEY:
+        headers["Authorization"] = f"Api-Key {CRUD_API_KEY}"
+    payload = {
+        "database_id": DATABASE_ID,
+        "collection_name": CRUD_COLLECTION_NAME,
+        "data": [document]
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        if 200 <= resp.status_code < 300:
+            return True
+        log_message(f"CRUD POST failed {resp.status_code}: {resp.text}")
+        return False
+    except Exception as e:
+        log_message(f"CRUD POST exception: {e}")
+        return False
+
+
+def save_coordinates_to_crud(task_id, keyword, mode, centers, bounds, tiles, target_coords, email, radius_km):
+    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+    document = {
+        "sessionId": task_id,
+        "createdAt": now_iso,
+        "updatedAt": now_iso,
+        "status": "initialized",
+        "urls": [],
+        "results": {},
+        "metadata": {
+            "mode": mode,
+            "keyword": keyword,
+            "email": email,
+            "radiusKm": radius_km,
+            "centers": centers,
+            "bounds": {
+                "top_left": list(bounds[0]) if bounds else None,
+                "top_right": list(bounds[1]) if bounds else None,
+                "bottom_left": list(bounds[2]) if bounds else None,
+                "bottom_right": list(bounds[3]) if bounds else None,
+            },
+            "tiles": tiles,
+            "target_coords": target_coords,
+        },
+        "email": email,
+    }
+    _post_to_crud(CRUD_COORDS_PATH, document)
+
+
+def save_results_to_crud(task_id, keyword, results, task_snapshot):
+    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+    urls = [r.get("URL") for r in results if r.get("URL")]
+    metadata = {
+        "mode": "location" if task_snapshot.get("center") else "csv",
+        "keyword": keyword,
+        "email": task_snapshot.get("email", ""),
+        "radiusKm": task_snapshot.get("radius_km", None),
+        "centers": task_snapshot.get("centers") or ([list(task_snapshot.get("center"))] if task_snapshot.get("center") else []),
+        "bounds": {
+            "top_left": list(task_snapshot.get("bounds")[0]) if task_snapshot.get("bounds") else None,
+            "top_right": list(task_snapshot.get("bounds")[1]) if task_snapshot.get("bounds") else None,
+            "bottom_left": list(task_snapshot.get("bounds")[2]) if task_snapshot.get("bounds") else None,
+            "bottom_right": list(task_snapshot.get("bounds")[3]) if task_snapshot.get("bounds") else None,
+        } if task_snapshot.get("bounds") else None,
+        "tiles": task_snapshot.get("tiles"),
+        "target_coords": task_snapshot.get("target_coords"),
+        "country": task_snapshot.get("country", ""),
+        "city": task_snapshot.get("city", ""),
+    }
+    document = {
+        "sessionId": task_id,
+        "createdAt": now_iso,
+        "updatedAt": now_iso,
+        "status": "completed" if not task_snapshot.get("error") else "error",
+        "urls": urls,
+        "results": {"items": results},
+        "metadata": metadata,
+        "email": task_snapshot.get("email", ""),
+    }
+    _post_to_crud(CRUD_RESULTS_PATH, document)
+
+def get_city_coordinates(country: str, city: str):
+    try:
+        country_files = {f.lower(): f for f in os.listdir(JSON_FOLDER) if f.endswith(".json")}
+        country_filename = country.lower() + ".json"
+        if country_filename not in country_files:
+            return None
+        file_path = os.path.join(JSON_FOLDER, country_files[country_filename])
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for entry in data:
+            if entry.get("ASCII Name", "").lower() == city.lower():
+                try:
+                    coords = float(entry.get("latitude")), float(entry.get("longitude"))
+                    log_message(f"📍 Found coordinates for {city}, {country}: {coords}")
+                    return coords
+                except Exception:
+                    return None
+        log_message(f"⚠️ City {city} not found in file {country_filename}")
+        return None
+    except Exception:
+        log_message(f"⚠️ Error reading city data for {country}: {traceback.format_exc()}")
+        return None
+
+def fetch_inscriber_tiles(bounds):
+    log_message("🔄 Requesting tiles from inscriber")
+    try:
+        payload = {
+            "top_left": list(bounds[0]),
+            "top_right": list(bounds[1]),
+            "bottom_left": list(bounds[2]),
+            "bottom_right": list(bounds[3])
+        }
+        resp = requests.post(INSCRIBER_URL, json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, list):
+            tiles = [(float(p[0]), float(p[1])) for p in data]
+            log_message(f"🧩 Received {len(tiles)} tiles (list) from inscriber")
+            return tiles
+        if isinstance(data, dict) and "raw_coordinates" in data:
+            flat = []
+            for block in data["raw_coordinates"]:
+                if isinstance(block, list):
+                    for item in block:
+                        lat = item.get("latitude") if isinstance(item, dict) else (item[0] if isinstance(item, (list, tuple)) and len(item) >= 2 else None)
+                        lon = item.get("longitude") if isinstance(item, dict) else (item[1] if isinstance(item, (list, tuple)) and len(item) >= 2 else None)
+                        if lat is not None and lon is not None:
+                            flat.append((float(lat), float(lon)))
+            log_message(f"🧩 Received {len(flat)} tiles (raw_coordinates) from inscriber")
+            return flat
+        return []
+    except Exception as e:
+        log_message(f"⚠️ Inscriber fetch failed: {e}")
+        return []
+
+def build_target_coordinates(centers, relative_tiles):
+    log_message(f"📐 Building target coordinates: centers={len(centers)}, tiles={len(relative_tiles)}")
+    if not relative_tiles:
+        return centers
+    targets = []
+    for c_lat, c_lon in centers:
+        for d_lat, d_lon in relative_tiles:
+            targets.append((c_lat + d_lat, c_lon + d_lon))
+    return targets
+
+def scrape_by_coordinates(task_id, keyword, target_coords):
+    driver = None
+    try:
+        driver = init_driver()
+        if not driver:
+            log_message("❌ Failed to initialize driver")
+            tasks[task_id]["running"] = False
+            tasks[task_id]["error"] = "Failed to initialize web driver"
+            return
+
+        results = []
+        processed_urls = set()
+
+        for idx, (lat, lon) in enumerate(target_coords):
+            if not tasks.get(task_id, {}).get("running", False):
+                break
+            try:
+                maps_url = f"https://www.google.com/maps/search/{requests.utils.quote(keyword)}/@{lat},{lon},14z"
+                log_message(f"🔍 Searching around {lat:.6f},{lon:.6f} ({idx+1}/{len(target_coords)})")
+                driver.get(maps_url)
+                smart_sleep(6, 10, "for results to load")
+
+                loaded = False
+                for _ in range(3):
+                    try:
+                        elements = driver.find_elements(By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]")
+                        if len(elements) > 0:
+                            loaded = True
+                            break
+                        time.sleep(2)
+                    except Exception:
+                        time.sleep(2)
+                if not loaded:
+                    continue
+
+                # Aggressively scroll the results feed to load more items
+                try:
+                    feed = driver.find_element(By.XPATH, "//div[@role='feed']")
+                    for _ in range(6):  # increase as needed
+                        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight;", feed)
+                        time.sleep(1.2)
+                except Exception:
+                    pass
+
+                items = driver.find_elements(By.XPATH, "//div[@role='feed']//a[contains(@href, '/maps/place/')]")
+                for item in items[:30]:  # process more items per coordinate
+                    if not tasks.get(task_id, {}).get("running", False):
+                        break
+                    try:
+                        url = item.get_attribute("href")
+                        if not url or url in processed_urls:
+                            continue
+                        processed_urls.add(url)
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
+                        time.sleep(1)
+                        driver.execute_script("arguments[0].click();", item)
+                        smart_sleep(4, 7, "for business page to load")
+                        details = extract_restaurant_details(driver, url, task_id)
+                        if details["Name"] != "N/A":
+                            business_data = {
+                                "Name": details["Name"],
+                                "Address": details["Address"],
+                                "Phone": details["Phone"],
+                                "Website": details["Website"],
+                                "URL": url,
+                                "City": "",
+                                "Country": "",
+                                "Rating": details["Rating"],
+                                "Reviews": details["Reviews"],
+                                "Reviews_Count": details["Reviews_Count"],
+                                "Plus Code": details["Plus Code"],
+                                "Category": details["Category"],
+                                "Hours": details["Hours"],
+                                "Has_Multiple_Locations": details["Has_Multiple_Locations"],
+                                "Has_Contact_Info": details["Has_Contact_Info"],
+                                "Has_Sufficient_Reviews": details["Has_Sufficient_Reviews"],
+                                "Has_Working_Hours": details["Has_Working_Hours"],
+                                "Latitude": f"{lat}",
+                                "Longitude": f"{lon}",
+                            }
+                            results.append(business_data)
+                            tasks[task_id]["results"] = results
+                            tasks[task_id]["progress"] = len(results)
+                        driver.back()
+                        smart_sleep(2, 3, "after going back")
+                    except Exception:
+                        try:
+                            driver.back()
+                            time.sleep(1)
+                        except Exception:
+                            pass
+                        continue
+            except Exception as e:
+                log_message(f"❌ Error at coordinate {lat},{lon}: {e}")
+                continue
+
+        log_message(f"🎉 Coordinate-based scraping completed! Total businesses found: {len(results)}")
+
+    except Exception as e:
+        log_message(f"❌ Critical error in coordinate scraping: {e}")
+        tasks[task_id]["error"] = str(e)
+    finally:
+        if driver:
+            try:
+                driver.quit()
+                log_message("✓ Driver closed successfully")
+            except Exception:
+                pass
+        if task_id in tasks:
+            tasks[task_id]["running"] = False
+            log_message(f"Task {task_id} completed with {len(tasks[task_id].get('results', []))} results")
+
 @app.get("/countries")
 def get_countries():
     try:
@@ -846,19 +1124,28 @@ def get_cities(country: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/upload/")
-async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Form(...)):
+async def upload_csv(file: UploadFile, keyword: str = Form(...), email: str = Form(...), radius_km: float = Form(5.0)):
     task_id = str(time.time())
     df = pd.read_csv(file.file)
+    centers = []
+    lat_col = next((c for c in df.columns if str(c).strip().lower()=="latitude"), None)
+    lon_col = next((c for c in df.columns if str(c).strip().lower()=="longitude"), None)
+    if not lat_col or not lon_col:
+        return JSONResponse(status_code=400, content={"error": "CSV must contain 'latitude' and 'longitude' columns"})
+    for _, row in df.iterrows():
+        if pd.isna(row[lat_col]) or pd.isna(row[lon_col]):
+            continue
+        try:
+            centers.append((float(row[lat_col]), float(row[lon_col])))
+        except Exception:
+            continue
 
-    location_data = []
-    for index, row in df.iterrows():
-        postal_code = str(row.iloc[0]) if not pd.isna(row.iloc[0]) else ""
-        city = str(row.iloc[1]) if not pd.isna(row.iloc[1]) else ""
-        country = str(row.iloc[2]) if not pd.isna(row.iloc[2]) else ""
-        location_data.append([postal_code, city, country])
+    bounds = calculate_boundary_points(float(radius_km))
+    tiles = fetch_inscriber_tiles(bounds)
+    target_coords = build_target_coordinates(centers, tiles)
 
-    tasks[task_id] = {"running": True, "progress": 0, "results": [], "error": None, "postal_code": postal_code, "city": city, "country": country}
-    threading.Thread(target=scrape_Maps, args=(task_id, location_data, keyword)).start()
+    tasks[task_id] = {"running": True, "progress": 0, "results": [], "error": None, "centers": centers, "bounds": bounds, "tiles": tiles, "target_coords": target_coords, "keyword": keyword, "email": email, "radius_km": radius_km, "started_at": time.time()}
+    threading.Thread(target=scrape_by_coordinates, args=(task_id, keyword, target_coords)).start()
 
     return {"message": "Processing started", "task_id": task_id}
 
@@ -905,7 +1192,7 @@ async def search_by_location(keyword: str = Form(...), country: str = Form(...),
         tasks[task_id]["error"] = f"Failed to start scraping thread: {str(e)}"
         tasks[task_id]["running"] = False
         return JSONResponse(status_code=500, content={"error": tasks[task_id]["error"]})
-    
+
     return {"message": "Processing started", "task_id": task_id}
 
 @app.get("/progress/{task_id}")
