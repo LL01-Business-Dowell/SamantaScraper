@@ -1,120 +1,186 @@
-# Google Maps Scraper Web Application
+🚀 Google Maps Scraper Web Application
 
-This project provides a web application that allows users to search for businesses on Google Maps based on keywords, locations, and postal codes without using the paid Google Maps API. Instead, it uses Selenium with headless Chrome to perform searches and extract data.
+This project is a fully dockerized web platform for extracting business data from Google Maps without using the paid Google Maps API.
+It uses:
 
-## Features
+React + Vite frontend
 
-- **React Frontend**: Modern, responsive UI built with React and Vite
-- **FastAPI Backend**: Efficient API with background task processing
-- **Dockerized Setup**: Easy deployment with Docker and docker-compose
-- **CSV Upload**: Upload postal codes via CSV file
-- **Progress Tracking**: Real-time progress updates during search
-- **Cancelable Tasks**: Ability to cancel ongoing searches
-- **Data Export**: Download search results as CSV
+FastAPI + Selenium + Headless Chromium backend
 
-## Project Structure
+Django microservice (inscribing_proj) for geospatial inscribing logic
 
-```
-project-root/
-├── frontend/          # React frontend built with Vite
-├── backend/           # FastAPI backend
-├── docker-compose.yml # Docker Compose configuration
-└── README.md          # This file
-```
+Nginx reverse proxy for serving the frontend and routing API requests
 
-## Requirements
+The system supports keyword-based business scraping, coordinate-based queries, task progress tracking, and CSV export — entirely without Google API costs.
 
-- Docker
-- Docker Compose
+✨ Features
+🔍 Google Maps Scraper (No Paid API)
 
-## Getting Started
+Uses Selenium automation + headless Chromium to gather business data from Google Maps.
 
-### 1. Clone the repository
+🖥 Modern Frontend (React + Vite)
 
-```bash
-git clone <repository-url>
-cd google-maps-scraper
-```
+Fast, responsive UI with CSV upload, progress indicators, and data export.
 
-### 2. Start the application with Docker Compose
+⚡ FastAPI Backend
 
-```bash
-docker-compose up
-```
+Handles scraping tasks, progress tracking, data processing, and API endpoints.
+
+🌐 Django Inscribing Engine
+
+A separate microservice that calculates inscribed coordinate points used for radius-based map searches.
+
+🐳 Fully Dockerized
+
+All components run through Docker + Docker Compose.
+
+📄 CSV Upload & Result Export
+
+Upload coordinate files and export final scraped results.
+
+🔁 Real-Time Progress
+
+Shows the scraping status so users can monitor long-running tasks.
+
+📁 Project Structure
+SamantaScraper/
+├── backend/           # FastAPI + Selenium + Chromium scraper
+├── frontend/          # React + Vite UI (built and served via Nginx)
+├── inscribing_proj/   # Django microservice for geospatial inscribing logic
+├── nginx/             # Nginx configuration
+├── docker-compose.yml # Full system orchestration
+└── README.md
+
+📦 Requirements
+
+Docker
+
+Docker Compose
+
+All dependencies (Python, Node, Chromium, drivers, etc.) are installed inside containers.
+
+▶️ Getting Started
+1. Clone the repository
+git clone https://github.com/LL01-Business-Dowell/SamantaScraper
+cd SamantaScraper
+
+2. Start the full system
+docker-compose up --build
+
 
 This will:
-- Build the frontend and backend Docker images
-- Start both services
-- Make the app available at http://localhost:3000
 
-### 3. Using the application
+Build the backend (FastAPI + Selenium + Chromium)
 
-1. Visit http://localhost:3000 in your browser
-2. Upload a CSV file containing a column named 'postal_code'
-3. Enter a keyword (e.g., "restaurants", "coffee shops", etc.)
-4. Enter a location (e.g., "New York", "London", etc.)
-5. Click "Search" and wait for the results
-6. Download results as CSV using the "Download CSV" button
+Build the inscribing Django microservice
 
-## CSV Format
+Build the frontend
 
-The uploaded CSV file should have a column named 'postal_code' containing the postal codes you want to search.
+Start Nginx to serve the frontend and reverse-proxy API calls
 
-Example:
-```
-postal_code
-10001
-10002
-10003
-```
+Once everything is running:
 
-## Development
+👉 Open http://localhost
+ in your browser.
 
-### Frontend Development
+🧭 How to Use the App
 
-The frontend is in the `frontend/` directory. To develop locally:
+Navigate to http://localhost
 
-```bash
+Upload a CSV containing:
+
+latitude
+
+longitude
+
+Enter:
+
+a keyword (e.g., restaurants, hotels, salons)
+
+a location (e.g., Mumbai, New York, Berlin)
+
+Click Search
+
+Wait for progress updates (scraping takes time)
+
+When complete, click Download CSV to save results
+
+📂 CSV Format
+
+Your CSV must contain:
+
+latitude,longitude, city, country
+19.0760,72.8777,Bengaluru,India
+40.7128,-74.0060,Bengaluru,India
+...
+
+
+Any additional columns will be ignored.
+
+🧑‍💻 Development Setup
+Frontend
 cd frontend
 npm install
 npm run dev
-```
 
-### Backend Development
-
-The backend is in the `backend/` directory. To develop locally:
-
-```bash
+Backend (FastAPI)
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
-```
 
-## Technical Details
+Inscribing Service (Django)
+cd inscribing_proj
+pip install -r requirements.txt
+python manage.py runserver
 
-### Frontend
+⚙️ Technical Overview
+Frontend
 
-- Built with React and Vite
-- Uses axios for API requests
-- Styled with custom CSS for responsive design
-- Uses react-csv for CSV export
-- Uses react-toastify for notifications
+React + Vite
 
-### Backend
+Axios for API calls
 
-- Built with FastAPI
-- Uses Selenium with headless Chrome for web scraping
-- Background task processing for long-running searches
-- In-memory task management
+react-csv for CSV export
 
-## Docker Configuration
+react-toastify for notifications
 
-- Frontend container: Node.js with Vite development server
-- Backend container: Python with FastAPI, headless Chrome, and ChromeDriver
-- Docker Compose for coordinating both services
+Responsive layout with custom CSS
 
-## Limitations
+Backend (FastAPI + Selenium)
 
-- Google Maps may block your IP if you make too many requests in a short period
-- The scraper is dependent on Google Maps HTML structure, which may change
-- Limited to 20 results per postal code to avoid long execution times
+Headless Chromium scraping
+
+Automatic ChromeDriver handling
+
+Background scraping tasks
+
+Real-time progress tracking
+
+Data cleaning + transformation
+
+Django Inscribing Service
+
+Computes radius-based coordinates
+
+Returns inscribed geographic points
+
+Used by the backend scraper before firing Selenium queries
+
+🐳 Docker Architecture
+Containers:
+Container	Purpose
+frontend	Builds React app (Nginx serves final build)
+backend	FastAPI + Selenium + Chromium scraper
+inscriber	Django microservice for inscribing logic
+nginx	Serves frontend + reverse proxies /api/
+Networking
+
+Docker Compose internal hostnames:
+
+backend → http://backend:8000
+inscriber → http://inscriber:8002
+frontend → built and served via Nginx
+
+Nginx routes
+/               → React build
+/api/*          → FastAPI backend
