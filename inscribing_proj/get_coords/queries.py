@@ -1,87 +1,38 @@
-import traceback
+import os
 import json
+import time
+import traceback
 import requests
 from decouple import config
-import traceback
 
+
+# ============================================================
+# Load environment variables safely
+# ============================================================
 
 try:
-    database_id = config("DATABASE_ID")
-    datacube_api_url = config("BASE_DATACUBE_URL")
-    crud_url = datacube_api_url+"api/crud"
-    api_key = config("API_KEY")
-    collection_name = config("INDEX_COLLECTION_NAME")
+    DATABASE_ID = config("DATABASE_ID")
+    BASE_DATACUBE_URL = config("BASE_DATACUBE_URL")
+    CRUD_URL = BASE_DATACUBE_URL + "api/crud"
+    API_KEY = config("API_KEY")
+    INDEX_COLLECTION_NAME = config("INDEX_COLLECTION_NAME")
 
-    headers = {
-            "Authorization": f"Api-Key {api_key}",
-            "Content-Type": "application/json"
-        }
-    
-    print("Environment variables loaded:")
-    print("DATABASE_ID:", database_id)
-    print("INDEX_COLLECTION_NAME:", collection_name)
-    print("API_KEY present:", bool(api_key))
-
-except:
-    print("\n=== ERROR LOADING ENV VARIABLES ===")
-    traceback.print_exc()
-    print("===================================\n")
-    raise
-
-
-### DATACUBE QUERIES ###
-def get_data_datacube(collection_name = None , filters={}):
-    if collection_name is None:
-        collection_name = config("INDEX_COLLECTION_NAME")
-        
-    length =len( list(filters.keys()))
-    if length:
-        filters = json.dumps(filters)
-    params =params = {
-    "database_id": database_id,
-    "collection_name": collection_name,
-    "filters": filters,
-    "page":1,
-    "page_size":202
-}
-
-    print(f"Get data datacube filters = {filters} length of filters = {length} collection_name {collection_name}")
-    
-    try:
-        res = requests.get(url=crud_url,params=params, headers=headers).json()
+    HEADERS = {
+        "Authorization": f"Api-Key {API_KEY}",
+        "Content-Type": "application/json"
+    }
 
     print("Environment variables loaded:")
     print("DATABASE_ID:", DATABASE_ID)
     print("INDEX_COLLECTION_NAME:", INDEX_COLLECTION_NAME)
     print("API_KEY present:", bool(API_KEY))
 
-except Exception as e:
+except Exception:
     print("\n=== ERROR LOADING ENV VARIABLES ===")
     traceback.print_exc()
     print("===================================\n")
     raise
 
-
-# ============================================================
-# Utility: Normalize coordinates
-# ============================================================
-
-def _normalize_point(point):
-    """
-    Accept either:
-    [lat, lon] → convert to {"latitude": lat, "longitude": lon}
-    {"latitude": ..., "longitude": ...} → passthrough
-    """
-    if isinstance(point, (list, tuple)):
-        if len(point) != 2:
-            raise ValueError("Point list must be [latitude, longitude]")
-        return {"latitude": point[0], "longitude": point[1]}
-
-    if isinstance(point, dict):
-        if "latitude" in point and "longitude" in point:
-            return point
-
-    raise ValueError("Invalid point format. Must be [lat, lon] or {latitude, longitude}")
 
 
 # ============================================================
@@ -89,9 +40,7 @@ def _normalize_point(point):
 # ============================================================
 
 def get_data_datacube(collection_name=None, filters=None, page_size=200):
-    """
-    Call Datacube Fetch API.
-    """
+
     if collection_name is None:
         collection_name = INDEX_COLLECTION_NAME
 
@@ -110,12 +59,32 @@ def get_data_datacube(collection_name=None, filters=None, page_size=200):
         response = requests.get(CRUD_URL, params=params, headers=HEADERS)
         response.raise_for_status()
         return response.json()
+
     except Exception as e:
+        traceback.print_exc()
         raise Exception(f"Datacube request failed: {e}")
 
 
+
 # ============================================================
-# Fetch list of latitude collections
+# Normalize Point
+# ============================================================
+
+def _normalize_point(point):
+    if isinstance(point, (list, tuple)):
+        if len(point) != 2:
+            raise ValueError("Point list must be [latitude, longitude]")
+        return {"latitude": point[0], "longitude": point[1]}
+
+    if isinstance(point, dict) and "latitude" in point and "longitude" in point:
+        return point
+
+    raise ValueError("Invalid point format. Must be [lat, lon] or {latitude, longitude}")
+
+
+
+# ============================================================
+# Fetch Latitude Collections
 # ============================================================
 
 def get_latitude_collections():
@@ -126,61 +95,34 @@ def get_latitude_collections():
         duration = time.time() - start
 
         collections = result.get("result", {}).get("collections", [])
+        collections.sort()
 
         print(f"\n=== Datacube index fetch time: {duration:.2f} seconds ===")
         print(f"Collections returned: {len(collections)}")
 
-        collections.sort()
         return collections
 
     except Exception as e:
         duration = time.time() - start
         print(f"\n=== Datacube index fetch FAILED after {duration:.2f} seconds ===")
-
         raise Exception(f"Failed to fetch latitude index: {e}")
 
 
-# ============================================================
-# Binary Search Helper
-# ============================================================
-
-def binary_search(arr, value):
-    low, high = 0, len(arr) - 1
-
-    while low <= high:
-        mid = (low + high) // 2
-        mid_val = arr[mid]
-
-        if mid_val == value:
-            return mid
-        elif mid_val < value:
-            low = mid + 1
-        else:
-            high = mid - 1
-
-    return high  # nearest lower index
-
 
 # ============================================================
-# Main: Datacube Bounding Box Query
+# Main bounding box → Send to Inscriber
 # ============================================================
 
 def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_right):
+
     total_start = time.time()
 
-    # ---- Normalize inputs ----
+    # Normalize
     top_left = _normalize_point(top_left)
     top_right = _normalize_point(top_right)
     bottom_left = _normalize_point(bottom_left)
     bottom_right = _normalize_point(bottom_right)
 
-    print("\n=== Normalized Coordinates ===")
-    print("TL:", top_left)
-    print("TR:", top_right)
-    print("BL:", bottom_left)
-    print("BR:", bottom_right)
-
-    # ---- Build payload for inscriber ----
     payload = {
         "top_left": [top_left["latitude"], top_left["longitude"]],
         "top_right": [top_right["latitude"], top_right["longitude"]],
@@ -191,36 +133,17 @@ def query_by_four_corners_datacube(top_left, top_right, bottom_left, bottom_righ
     INSCRIBER_URL = os.getenv("INSCRIBER_URL")
 
     try:
-        print("\n=== Sending payload to inscriber ===")
-        print("URL:", INSCRIBER_URL)
-        print("Payload:", json.dumps(payload, indent=2))
-
-        data_start = time.time()
         response = requests.post(INSCRIBER_URL, json=payload)
-        data_duration = time.time() - data_start
-
-        print(f"\n=== Time to fetch data from inscriber: {data_duration:.2f} seconds ===")
         response.raise_for_status()
-        inscriber_result = response.json()
 
-        # ---- Wrap inscriber response to match original format ----
-        results = {
-            "count": len(inscriber_result.get("documents", inscriber_result)),  # fallback if key not present
-            "documents": inscriber_result.get("documents", inscriber_result),
+        data = response.json()
+
+        return {
+            "count": len(data.get("documents", data)),
+            "documents": data.get("documents", data),
             "collections_scanned": ["inscriber_endpoint"]
         }
 
     except Exception as e:
-        data_duration = time.time() - data_start
-        print(f"\n=== ERROR fetching data from inscriber after {data_duration:.2f} seconds ===")
         traceback.print_exc()
         return {"error": str(e)}
-
-    # ---- Final total time ----
-    total_duration = time.time() - total_start
-    print(f"\n=== TOTAL Datacube query time: {total_duration:.2f} seconds ===")
-
-    return results
-
-
-
