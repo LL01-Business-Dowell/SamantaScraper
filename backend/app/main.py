@@ -1176,13 +1176,24 @@ async def search_by_location(keyword: str = Form(...), country: str = Form(...),
     
     bounds = calculate_boundary_points(float(radius_km))
     inscribed_points = fetch_inscriber_tiles(bounds)
-    # Flatten
+
+    if isinstance(inscribed_points, dict):
+        raw_coords = inscribed_points.get("raw_coordinates", [])
+    elif isinstance(inscribed_points, list):
+        raw_coords = inscribed_points 
+    else:
+        raw_coords = []
+        print("⚠️ Unexpected inscriber response type:", type(inscribed_points))
+
+    # --- Flatten ---
     flattened_inscribed_points = [
         point
-        for sublist in inscribed_points.get("raw_coordinates", [])
+        for sublist in raw_coords
         for point in sublist
     ]
+
     final_points_json = apply_center_offset(center, flattened_inscribed_points)
+
 
 
     try:

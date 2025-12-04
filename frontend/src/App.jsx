@@ -132,11 +132,12 @@ const App = () => {
       formData.append("city", selectedCity);
       formData.append("radius_km", String(radiusKm));
 
+      setIsRunning(true);
+
       try {
         // API call for location-based search
         const response = await axios.post("/search-by-location/", formData);
         setTaskId(response.data.task_id);
-        setIsRunning(true);
         setSearchComplete(false);
       } catch (error) {
         console.error("Error starting the location-based search", error);
