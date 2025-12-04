@@ -34,6 +34,9 @@ const App = () => {
   const [searchType, setSearchType] = useState("file"); // "file" or "location"
   const [radiusKm, setRadiusKm] = useState(5);
 
+  const [forceStop, setForceStop] = useState(false);
+
+
   axios.defaults.baseURL = API_BASE_URL;
 
   // Fetch countries (JSON filenames from backend)
@@ -167,14 +170,17 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (taskId && isRunning) {
+    if (taskId && isRunning && !forceStop) {
       intervalRef.current = setInterval(async () => {
+
+        if (forceStop) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+          return;
+        }
+
         try {
           const response = await axios.get(`/progress/${taskId}`);
-
-          if (response.data.progress !== undefined) {
-            setProgress(response.data.progress);
-          }
           if (response.data.results) {
             setResults(response.data.results);
           }
@@ -198,10 +204,14 @@ const App = () => {
         intervalRef.current = null;
       }
     };
-  }, [taskId, isRunning]);
+  }, [taskId, isRunning, forceStop]);
 
   const handleCancel = async () => {
     if (taskId) {
+
+      setForceStop(true);  
+      setIsRunning(false);
+
       try {
         await axios.post(`/cancel/${taskId}`);
 
@@ -514,27 +524,18 @@ const App = () => {
                 {isRunning ? "Searching..." : "Start Scraping"}
               </button>
 
-              {/* Progress Indicator */}
               {isRunning && (
-                <div className="progress-container">
-                  <div className="progress-bar-container">
-                    <div
-                      className="progress-bar"
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="progress-info">
-                    <p className="progress-text">
-                      Progress: {progress.toFixed(2)}%
-                    </p>
-                    <button
-                      onClick={handleCancel}
-                      disabled={!isRunning}
-                      className="cancel-button"
-                    >
-                      <FaTimes className="button-icon-small" /> Cancel
-                    </button>
-                  </div>
+                <div className="running-indicator">
+                  <div className="spinner"></div>
+                  <p className="running-text">Scraping in progress…</p>
+
+                  <button
+                    onClick={handleCancel}
+                    disabled={!isRunning}
+                    className="cancel-button"
+                  >
+                    <FaTimes className="button-icon-small" /> Cancel
+                  </button>
                 </div>
               )}
 

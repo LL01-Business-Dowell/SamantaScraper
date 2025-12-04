@@ -844,7 +844,7 @@ def _post_to_crud(path, document):
         "data": [document]
     }
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        resp = requests.post(url, json=payload, headers=headers, timeout=300)
         if 200 <= resp.status_code < 300:
             return True
         log_message(f"CRUD POST failed {resp.status_code}: {resp.text}")
@@ -947,7 +947,7 @@ def fetch_inscriber_tiles(bounds):
             "bottom_left": list(bounds[2]),
             "bottom_right": list(bounds[3])
         }
-        resp = requests.post(INSCRIBER_URL, json=payload, timeout=30)
+        resp = requests.post(INSCRIBER_URL, json=payload, timeout=300)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list):
